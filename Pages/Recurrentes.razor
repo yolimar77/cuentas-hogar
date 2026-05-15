@@ -155,7 +155,8 @@
         {
             Tipo = TipoMovimiento.Gasto,
             FechaInicio = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
-            FechaFin = DateTime.Today.AddYears(1)
+            FechaFin = DateTime.Today.AddYears(1),
+            ModificadoEn = DateTime.UtcNow
         };
         if (_cuentas.Count > 0) _nuevo.CuentaId = _cuentas[0].Id;
         _esEdicion = false;
@@ -177,7 +178,8 @@
             CuentaId = rec.CuentaId,
             Activo = rec.Activo,
             CreadoEn = rec.CreadoEn,
-            Sincronizado = false
+            Sincronizado = false,
+            ModificadoEn = DateTime.UtcNow
         };
         _esEdicion = true;
         _mostrarFormulario = true;

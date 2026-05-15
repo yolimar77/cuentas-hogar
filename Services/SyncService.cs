@@ -7,6 +7,7 @@ public class SyncService(DriveService drive, LocalDbService db)
 {
     private readonly JsonSerializerOptions _json = new() { PropertyNameCaseInsensitive = true };
     private const string NombreEliminados = "deletions.json";
+    private const string NombreIndice = "index.json";
 
     public bool SincronizandoAhora { get; private set; } = false;
     public DateTime? UltimaSincronizacion { get; private set; }
@@ -23,12 +24,18 @@ public class SyncService(DriveService drive, LocalDbService db)
 
         try
         {
-            var archivosEnDrive = await drive.ListarArchivosAsync();
-            int subidos = await SubirPendientesAsync();
-            int eliminados = await SincronizarEliminacionesAsync(archivosEnDrive);
-            int descargados = await DescargarNuevosAsync(archivosEnDrive);
+            var archivos = await drive.ListarArchivosAsync();
+            var indice = await LeerIndiceAsync(archivos);
+
+            int subidos = await SubirPendientesAsync(archivos, indice);
+            int eliminados = await SincronizarEliminacionesAsync(archivos);
+            int descargados = await DescargarYActualizarAsync(archivos, indice);
+
+            await GuardarIndiceAsync(archivos, indice);
+
             UltimaSincronizacion = DateTime.Now;
-            UltimoDetalle = $"↑{subidos} ↓{descargados} 🗑{eliminados} | Drive: {archivosEnDrive.Count} archivos";
+            UltimoDetalle = $"↑{subidos} ↓{descargados} 🗑{eliminados} | Drive: {archivos.Count} archivos";
+
             if (OnSyncCompletado is not null)
                 await OnSyncCompletado.Invoke();
         }
@@ -42,20 +49,50 @@ public class SyncService(DriveService drive, LocalDbService db)
         }
     }
 
-    // --- Subir lo que tenemos en local y no está en Drive ---
+    // --- Índice de versiones en Drive ---
 
-    private async Task<int> SubirPendientesAsync()
+    private async Task<Dictionary<string, DateTime>> LeerIndiceAsync(List<DriveFileInfo> archivos)
+    {
+        var archivo = archivos.FirstOrDefault(f => f.Nombre == NombreIndice);
+        if (archivo is null) return [];
+        var contenido = await drive.DescargarArchivoAsync(archivo.Id);
+        if (contenido is null) return [];
+        try { return JsonSerializer.Deserialize<Dictionary<string, DateTime>>(contenido, _json) ?? []; }
+        catch { return []; }
+    }
+
+    private async Task GuardarIndiceAsync(List<DriveFileInfo> archivos, Dictionary<string, DateTime> indice)
+    {
+        if (indice.Count == 0) return;
+        var json = JsonSerializer.Serialize(indice);
+        var archivo = archivos.FirstOrDefault(f => f.Nombre == NombreIndice);
+        if (archivo is not null)
+            await drive.ActualizarContenidoAsync(archivo.Id, json);
+        else
+            await drive.SubirArchivoAsync(NombreIndice, json);
+    }
+
+    // --- Subir pendientes (crear o actualizar en Drive) ---
+
+    private async Task<int> SubirPendientesAsync(List<DriveFileInfo> archivos, Dictionary<string, DateTime> indice)
     {
         int count = 0;
+        var driveIdx = archivos.ToDictionary(f => f.Nombre, f => f.Id);
+
         var movimientos = await db.ObtenerMovimientosAsync();
         foreach (var mov in movimientos.Where(m => !m.Sincronizado))
         {
             var nombre = $"mov-{mov.Id}.json";
             var json = JsonSerializer.Serialize(mov);
-            if (await drive.SubirArchivoAsync(nombre, json))
+            bool ok = driveIdx.TryGetValue(nombre, out var fileId)
+                ? await drive.ActualizarContenidoAsync(fileId, json)
+                : await drive.SubirArchivoAsync(nombre, json);
+
+            if (ok)
             {
                 mov.Sincronizado = true;
                 await db.GuardarMovimientoAsync(mov);
+                indice[$"mov-{mov.Id}"] = mov.ModificadoEn;
                 count++;
             }
         }
@@ -65,8 +102,70 @@ public class SyncService(DriveService drive, LocalDbService db)
         {
             var nombre = $"rec-{rec.Id}.json";
             var json = JsonSerializer.Serialize(rec);
-            if (await drive.SubirArchivoAsync(nombre, json))
+            bool ok = driveIdx.TryGetValue(nombre, out var fileId)
+                ? await drive.ActualizarContenidoAsync(fileId, json)
+                : await drive.SubirArchivoAsync(nombre, json);
+
+            if (ok)
             {
+                rec.Sincronizado = true;
+                await db.GuardarRecurrenteAsync(rec);
+                indice[$"rec-{rec.Id}"] = rec.ModificadoEn;
+                count++;
+            }
+        }
+        return count;
+    }
+
+    // --- Descargar nuevos y actualizar existentes según el índice ---
+
+    private async Task<int> DescargarYActualizarAsync(List<DriveFileInfo> archivos, Dictionary<string, DateTime> indice)
+    {
+        int count = 0;
+        var movLocales = (await db.ObtenerMovimientosAsync()).ToDictionary(m => m.Id);
+        var recLocales = (await db.ObtenerRecurrentesAsync()).ToDictionary(r => r.Id);
+        var eliminados = await db.ObtenerEliminadosAsync();
+
+        foreach (var archivo in archivos)
+        {
+            if (archivo.Nombre == NombreEliminados || archivo.Nombre == NombreIndice) continue;
+
+            if (archivo.Nombre.StartsWith("mov-") && archivo.Nombre.EndsWith(".json"))
+            {
+                var guid = archivo.Nombre[4..^5];
+                if (eliminados.Contains(guid)) continue;
+
+                bool esNuevo = !movLocales.ContainsKey(guid);
+                bool hayActualizacion = !esNuevo
+                    && indice.TryGetValue($"mov-{guid}", out var driveTs)
+                    && driveTs > movLocales[guid].ModificadoEn;
+
+                if (!esNuevo && !hayActualizacion) continue;
+
+                var contenido = await drive.DescargarArchivoAsync(archivo.Id);
+                if (contenido is null) continue;
+                var mov = JsonSerializer.Deserialize<Movimiento>(contenido, _json);
+                if (mov is null) continue;
+                mov.Sincronizado = true;
+                await db.GuardarMovimientoAsync(mov);
+                count++;
+            }
+            else if (archivo.Nombre.StartsWith("rec-") && archivo.Nombre.EndsWith(".json"))
+            {
+                var guid = archivo.Nombre[4..^5];
+                if (eliminados.Contains(guid)) continue;
+
+                bool esNuevo = !recLocales.ContainsKey(guid);
+                bool hayActualizacion = !esNuevo
+                    && indice.TryGetValue($"rec-{guid}", out var driveTs)
+                    && driveTs > recLocales[guid].ModificadoEn;
+
+                if (!esNuevo && !hayActualizacion) continue;
+
+                var contenido = await drive.DescargarArchivoAsync(archivo.Id);
+                if (contenido is null) continue;
+                var rec = JsonSerializer.Deserialize<MovimientoRecurrente>(contenido, _json);
+                if (rec is null) continue;
                 rec.Sincronizado = true;
                 await db.GuardarRecurrenteAsync(rec);
                 count++;
@@ -82,7 +181,6 @@ public class SyncService(DriveService drive, LocalDbService db)
         int aplicados = 0;
         var eliminadosLocales = await db.ObtenerEliminadosAsync();
 
-        // Leer deletions.json de Drive si existe
         var archivoDel = archivosEnDrive.FirstOrDefault(f => f.Nombre == NombreEliminados);
         HashSet<string> eliminadosDrive = [];
         if (archivoDel is not null)
@@ -95,7 +193,6 @@ public class SyncService(DriveService drive, LocalDbService db)
             }
         }
 
-        // Aplicar en local las eliminaciones que vinieron de Drive
         foreach (var id in eliminadosDrive)
         {
             if (!eliminadosLocales.Contains(id))
@@ -106,7 +203,6 @@ public class SyncService(DriveService drive, LocalDbService db)
             }
         }
 
-        // Fusionar y subir la lista actualizada a Drive si hay cambios
         var todos = eliminadosLocales.Union(eliminadosDrive).ToHashSet();
         if (todos.Count > 0)
         {
@@ -117,7 +213,6 @@ public class SyncService(DriveService drive, LocalDbService db)
                 await drive.SubirArchivoAsync(NombreEliminados, json);
         }
 
-        // Borrar de Drive los archivos individuales de los elementos eliminados
         foreach (var archivo in archivosEnDrive)
         {
             string? guid = null;
@@ -131,51 +226,5 @@ public class SyncService(DriveService drive, LocalDbService db)
         }
 
         return aplicados;
-    }
-
-    // --- Descargar lo que hay en Drive y no tenemos en local ---
-
-    private async Task<int> DescargarNuevosAsync(List<DriveFileInfo> archivosEnDrive)
-    {
-        int count = 0;
-        var movimientosLocales = await db.ObtenerMovimientosAsync();
-        var recurrentesLocales = await db.ObtenerRecurrentesAsync();
-        var eliminados = await db.ObtenerEliminadosAsync();
-
-        var idsMovLocal = movimientosLocales.Select(m => m.Id).ToHashSet();
-        var idsRecLocal = recurrentesLocales.Select(r => r.Id).ToHashSet();
-
-        foreach (var archivo in archivosEnDrive)
-        {
-            if (archivo.Nombre == NombreEliminados) continue;
-
-            if (archivo.Nombre.StartsWith("mov-") && archivo.Nombre.EndsWith(".json"))
-            {
-                var guid = archivo.Nombre[4..^5];
-                if (eliminados.Contains(guid) || idsMovLocal.Contains(guid)) continue;
-
-                var contenido = await drive.DescargarArchivoAsync(archivo.Id);
-                if (contenido is null) continue;
-                var mov = JsonSerializer.Deserialize<Movimiento>(contenido, _json);
-                if (mov is null) continue;
-                mov.Sincronizado = true;
-                await db.GuardarMovimientoAsync(mov);
-                count++;
-            }
-            else if (archivo.Nombre.StartsWith("rec-") && archivo.Nombre.EndsWith(".json"))
-            {
-                var guid = archivo.Nombre[4..^5];
-                if (eliminados.Contains(guid) || idsRecLocal.Contains(guid)) continue;
-
-                var contenido = await drive.DescargarArchivoAsync(archivo.Id);
-                if (contenido is null) continue;
-                var rec = JsonSerializer.Deserialize<MovimientoRecurrente>(contenido, _json);
-                if (rec is null) continue;
-                rec.Sincronizado = true;
-                await db.GuardarRecurrenteAsync(rec);
-                count++;
-            }
-        }
-        return count;
     }
 }

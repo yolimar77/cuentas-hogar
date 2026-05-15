@@ -12,6 +12,7 @@ public class Movimiento
     public string? Notas { get; set; }
     public DateTime CreadoEn { get; set; } = DateTime.UtcNow;
     public bool Sincronizado { get; set; } = false;
+    public DateTime ModificadoEn { get; set; } = DateTime.MinValue;
     public string? RecurrenteId { get; set; }
     public string? Periodo { get; set; }
 }

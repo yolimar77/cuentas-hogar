@@ -14,6 +14,7 @@ public class MovimientoRecurrente
     public bool Activo { get; set; } = true;
     public DateTime CreadoEn { get; set; } = DateTime.UtcNow;
     public bool Sincronizado { get; set; } = false;
+    public DateTime ModificadoEn { get; set; } = DateTime.MinValue;
 
     public bool EstaActivoEnMes(int mes, int anyo) =>
         Activo &&

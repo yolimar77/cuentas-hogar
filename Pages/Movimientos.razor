@@ -146,7 +146,7 @@
 
     private void AbrirNuevo()
     {
-        _nuevo = new Movimiento { Tipo = TipoMovimiento.Gasto, Fecha = DateTime.Today };
+        _nuevo = new Movimiento { Tipo = TipoMovimiento.Gasto, Fecha = DateTime.Today, ModificadoEn = DateTime.UtcNow };
         if (_cuentas.Count > 0) _nuevo.CuentaId = _cuentas[0].Id;
         _esEdicion = false;
         _mostrarFormulario = true;
@@ -165,7 +165,8 @@
             CuentaId = mov.CuentaId,
             Notas = mov.Notas,
             CreadoEn = mov.CreadoEn,
-            Sincronizado = false
+            Sincronizado = false,
+            ModificadoEn = DateTime.UtcNow
         };
         _esEdicion = true;
         _mostrarFormulario = true;
