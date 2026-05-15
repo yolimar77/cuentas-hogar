@@ -24,6 +24,7 @@ public class DriveService(IJSRuntime js, HttpClient http)
     public bool Conectado => _token != null;
     public bool VieneDriveRedirect { get; set; } = false;
     public string? FolderId => _folderId;
+    public bool NecesitaReconectar { get; private set; } = false;
     public event Action? OnEstadoCambiado;
 
     // --- Inicialización ---
@@ -73,6 +74,7 @@ public class DriveService(IJSRuntime js, HttpClient http)
 
     public async Task ConectarAsync()
     {
+        NecesitaReconectar = false;
         _authTcs = new TaskCompletionSource<string>();
         await js.InvokeVoidAsync("gis.connect");
         try
@@ -104,19 +106,9 @@ public class DriveService(IJSRuntime js, HttpClient http)
         if (_token != null)
             await js.InvokeVoidAsync("gis.disconnect", _token);
         _token = null;
+        NecesitaReconectar = false;
         await js.InvokeVoidAsync("storage.remove", TokenKey);
         OnEstadoCambiado?.Invoke();
-    }
-
-    public async Task LimpiarTokenSiExpiradoAsync()
-    {
-        try { _ = await ListarArchivosAsync(); }
-        catch
-        {
-            _token = null;
-            await js.InvokeVoidAsync("storage.remove", TokenKey);
-            OnEstadoCambiado?.Invoke();
-        }
     }
 
     // --- Gestión de carpeta compartida ---
@@ -124,11 +116,48 @@ public class DriveService(IJSRuntime js, HttpClient http)
     public async Task ObtenerOCrearCarpetaAsync()
     {
         if (!Conectado) return;
-        if (_folderId != null) return; // ya tenemos carpeta (propia o externa)
+
+        // Verificar folder ID existente
+        if (_folderId != null)
+        {
+            var verResp = await EnviarAsync(HttpMethod.Get, $"{ApiBase}/files/{_folderId}?fields=id,trashed");
+            if (verResp.IsSuccessStatusCode)
+            {
+                try
+                {
+                    var doc = JsonDocument.Parse(await verResp.Content.ReadAsStringAsync());
+                    var trashed = doc.RootElement.TryGetProperty("trashed", out var t) && t.GetBoolean();
+                    if (!trashed)
+                    {
+                        NecesitaReconectar = false;
+                        return; // carpeta accesible y válida
+                    }
+                }
+                catch { }
+            }
+            else if (verResp.StatusCode == System.Net.HttpStatusCode.Forbidden ||
+                     verResp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                NecesitaReconectar = true;
+                OnEstadoCambiado?.Invoke();
+                return;
+            }
+            // Carpeta borrada o no accesible, buscar/crear de nuevo
+            _folderId = null;
+        }
 
         // Buscar carpeta existente por nombre
         var q = Uri.EscapeDataString($"name='{NombreCarpeta}' and mimeType='application/vnd.google-apps.folder' and trashed=false");
-        var searchResp = await EnviarAsync(HttpMethod.Get, $"{ApiBase}/files?q={q}&fields=files(id,name)");
+        var searchResp = await EnviarAsync(HttpMethod.Get, $"{ApiBase}/files?q={q}&fields=files(id,name)&orderBy=createdTime");
+
+        if (searchResp.StatusCode == System.Net.HttpStatusCode.Forbidden ||
+            searchResp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            NecesitaReconectar = true;
+            OnEstadoCambiado?.Invoke();
+            return;
+        }
+
         if (searchResp.IsSuccessStatusCode)
         {
             var searchJson = await searchResp.Content.ReadAsStringAsync();
@@ -138,6 +167,8 @@ public class DriveService(IJSRuntime js, HttpClient http)
             {
                 _folderId = files[0].GetProperty("id").GetString()!;
                 await js.InvokeVoidAsync("storage.set", FolderKey, _folderId);
+                NecesitaReconectar = false;
+                OnEstadoCambiado?.Invoke();
                 return;
             }
         }
@@ -148,11 +179,22 @@ public class DriveService(IJSRuntime js, HttpClient http)
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
         req.Content = new StringContent(body, Encoding.UTF8, "application/json");
         var resp = await http.SendAsync(req);
+
+        if (resp.StatusCode == System.Net.HttpStatusCode.Forbidden ||
+            resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            NecesitaReconectar = true;
+            OnEstadoCambiado?.Invoke();
+            return;
+        }
+
         if (resp.IsSuccessStatusCode)
         {
             var json = await resp.Content.ReadAsStringAsync();
             _folderId = JsonDocument.Parse(json).RootElement.GetProperty("id").GetString()!;
             await js.InvokeVoidAsync("storage.set", FolderKey, _folderId);
+            NecesitaReconectar = false;
+            OnEstadoCambiado?.Invoke();
         }
     }
 

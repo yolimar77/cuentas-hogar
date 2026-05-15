@@ -1,5 +1,16 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Nav
+@inject DriveService Drive
+@implements IDisposable
+@using HomeAccounts.Services
+
+@if (Drive.NecesitaReconectar)
+{
+    <div class="bg-warning text-dark px-3 py-2 d-flex justify-content-between align-items-center" style="font-size:0.85rem">
+        <span>⚠️ Permisos de Google actualizados</span>
+        <a href="configuracion" class="btn btn-sm btn-dark">Reconectar</a>
+    </div>
+}
 
 <main class="pb-5">
     @Body
@@ -23,6 +34,13 @@
 </nav>
 
 @code {
+    protected override void OnInitialized() =>
+        Drive.OnEstadoCambiado += OnDriveCambiado;
+
+    private void OnDriveCambiado() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Drive.OnEstadoCambiado -= OnDriveCambiado;
+
     private bool EsRuta(string ruta)
     {
         var path = new Uri(Nav.Uri).AbsolutePath.TrimEnd('/');

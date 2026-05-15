@@ -50,7 +50,10 @@
     public async Task OnAppVisible()
     {
         if (Drive.Conectado)
+        {
+            await Drive.ObtenerOCrearCarpetaAsync();
             await Sync.SincronizarAsync();
+        }
     }
 
     public async ValueTask DisposeAsync()
