@@ -93,7 +93,12 @@ public class SyncService(DriveService drive, LocalDbService db)
         }
         foreach (var id in eliminados) merged.Remove(id);
 
-        var lista = merged.Values.OrderBy(m => m.Fecha).ToList();
+        // Si dos dispositivos generaron el mismo recurrente+periodo con IDs distintos, queda uno
+        var lista = merged.Values
+            .GroupBy(m => m.RecurrenteId != null ? $"{m.RecurrenteId}_{m.Periodo}" : m.Id)
+            .Select(g => g.OrderByDescending(m => m.ModificadoEn).First())
+            .OrderBy(m => m.Fecha)
+            .ToList();
 
         // Subir resultado a Drive
         var json = JsonSerializer.Serialize(lista);
@@ -102,19 +107,15 @@ public class SyncService(DriveService drive, LocalDbService db)
         else
             await drive.SubirArchivoAsync(NombreMovs, json);
 
-        // Actualizar local con lo que vino de Drive
-        int cambios = 0;
-        var localDict = local.ToDictionary(m => m.Id);
-        foreach (var mov in lista)
-        {
-            if (!localDict.TryGetValue(mov.Id, out var localMov) || mov.ModificadoEn > localMov.ModificadoEn)
-            {
-                mov.Sincronizado = true;
-                await db.GuardarMovimientoAsync(mov);
-                cambios++;
-            }
-        }
-        return cambios;
+        // Reemplazar local completo con el resultado del merge (elimina duplicados de recurrentes)
+        var listaIds = lista.Select(m => m.Id).ToHashSet();
+        var localIds = local.Select(m => m.Id).ToHashSet();
+        bool hayCambios = lista.Count != local.Count
+            || lista.Any(m => !localIds.Contains(m.Id))
+            || local.Any(m => !listaIds.Contains(m.Id));
+        foreach (var mov in lista) mov.Sincronizado = true;
+        await db.ReemplazarMovimientosAsync(lista);
+        return hayCambios ? 1 : 0;
     }
 
     // --- Recurrentes ---

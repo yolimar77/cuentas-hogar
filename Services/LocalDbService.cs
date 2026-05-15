@@ -144,6 +144,9 @@ public class LocalDbService(IJSRuntime js)
         await GuardarLista(KeyEliminados, lista);
     }
 
+    public async Task ReemplazarMovimientosAsync(List<Movimiento> lista) =>
+        await GuardarLista(KeyMovimientos, lista);
+
     public async Task LimpiarTodosEliminadosAsync() =>
         await GuardarLista(KeyEliminados, new List<string>());
 
