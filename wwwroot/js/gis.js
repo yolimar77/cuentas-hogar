@@ -1,3 +1,11 @@
+window.registerVisibilityHandler = (dotNetRef) => {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            dotNetRef.invokeMethodAsync('OnAppVisible');
+        }
+    });
+};
+
 window.gis = {
     _dotNetRef: null,
     _popupClient: null,

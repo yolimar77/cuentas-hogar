@@ -4,6 +4,8 @@
 @inject DriveService Drive
 @inject SyncService Sync
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
@@ -13,6 +15,8 @@
 </Router>
 
 @code {
+    private DotNetObjectReference<App>? _ref;
+
     protected override async Task OnInitializedAsync()
     {
         await Db.InicializarDatosDefaultAsync();
@@ -23,6 +27,9 @@
     {
         if (firstRender)
         {
+            _ref = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("registerVisibilityHandler", _ref);
+
             await Drive.InicializarAsync();
 
             if (Drive.VieneDriveRedirect)
@@ -34,5 +41,17 @@
             if (Drive.Conectado)
                 await Sync.SincronizarAsync();
         }
+    }
+
+    [JSInvokable]
+    public async Task OnAppVisible()
+    {
+        if (Drive.Conectado)
+            await Sync.SincronizarAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _ref?.Dispose();
     }
 }

@@ -3,6 +3,7 @@
 @using HomeAccounts.Services
 @inject LocalDbService Db
 @inject SyncService Sync
+@implements IDisposable
 
 <div class="container-sm py-3">
 
@@ -117,7 +118,19 @@
     private Movimiento _nuevo = new();
     private DateTime _mesFiltro = new(DateTime.Today.Year, DateTime.Today.Month, 1);
 
-    protected override async Task OnInitializedAsync() => await Cargar();
+    protected override async Task OnInitializedAsync()
+    {
+        Sync.OnSyncCompletado += OnSyncCompletado;
+        await Cargar();
+    }
+
+    private async Task OnSyncCompletado()
+    {
+        await Cargar();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Sync.OnSyncCompletado -= OnSyncCompletado;
 
     private async Task Cargar()
     {

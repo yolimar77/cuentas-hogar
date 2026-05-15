@@ -11,6 +11,8 @@ public class SyncService(DriveService drive, LocalDbService db)
     public DateTime? UltimaSincronizacion { get; private set; }
     public string? UltimoError { get; private set; }
 
+    public event Func<Task>? OnSyncCompletado;
+
     public async Task SincronizarAsync()
     {
         if (!drive.Conectado || SincronizandoAhora) return;
@@ -22,6 +24,8 @@ public class SyncService(DriveService drive, LocalDbService db)
             await SubirPendientesAsync();
             await DescargarNuevosAsync();
             UltimaSincronizacion = DateTime.Now;
+            if (OnSyncCompletado is not null)
+                await OnSyncCompletado.Invoke();
         }
         catch (Exception ex)
         {

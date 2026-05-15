@@ -3,6 +3,8 @@
 @using HomeAccounts.Services
 @inject LocalDbService Db
 @inject PrevisionService Prevision
+@inject SyncService Sync
+@implements IDisposable
 
 <div class="container-sm py-3">
 
@@ -91,6 +93,12 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Sync.OnSyncCompletado += OnSyncCompletado;
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
         var hoy = DateTime.Today;
         _prevision = await Prevision.CalcularAsync(hoy.Month, hoy.Year);
 
@@ -101,6 +109,14 @@
             .Take(5)
             .ToList();
     }
+
+    private async Task OnSyncCompletado()
+    {
+        await Cargar();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Sync.OnSyncCompletado -= OnSyncCompletado;
 
     private string MesActual() =>
         new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)
