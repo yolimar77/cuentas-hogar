@@ -16,12 +16,14 @@ public class SyncService(DriveService drive, LocalDbService db)
     public string? UltimoDetalle { get; private set; }
 
     public event Func<Task>? OnSyncCompletado;
+    public event Action? OnEstadoCambiado;
 
     public async Task SincronizarAsync()
     {
         if (!drive.Conectado || drive.FolderId == null || SincronizandoAhora) return;
         SincronizandoAhora = true;
         UltimoError = null;
+        OnEstadoCambiado?.Invoke();
 
         try
         {
@@ -52,6 +54,7 @@ public class SyncService(DriveService drive, LocalDbService db)
         finally
         {
             SincronizandoAhora = false;
+            OnEstadoCambiado?.Invoke();
         }
     }
 

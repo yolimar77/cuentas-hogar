@@ -4,9 +4,34 @@
 @inject LocalDbService Db
 @inject PrevisionService Prevision
 @inject SyncService Sync
+@inject DriveService Drive
 @implements IDisposable
 
 <div class="container-sm py-3">
+
+    <!-- Estado de sincronización -->
+    <div class="d-flex align-items-center gap-2 mb-3" style="font-size:0.82rem;min-height:22px">
+        @if (Sync.SincronizandoAhora)
+        {
+            <div class="spinner-border text-primary" style="width:14px;height:14px;border-width:2px" role="status"></div>
+            <span class="text-muted">Sincronizando...</span>
+        }
+        else if (!Drive.Conectado)
+        {
+            <span style="color:#fd7e14">●</span>
+            <a href="configuracion" class="text-decoration-none" style="color:#fd7e14">Sin conexión a Drive · Ir a Ajustes</a>
+        }
+        else if (Sync.UltimoError is not null)
+        {
+            <span style="color:#dc3545">●</span>
+            <span class="text-danger">Error de sync · <a href="configuracion" class="text-danger">Ajustes</a></span>
+        }
+        else if (Sync.UltimaSincronizacion is not null)
+        {
+            <span style="color:#198754">●</span>
+            <span class="text-muted">Sincronizado · @Sync.UltimaSincronizacion.Value.ToString("HH:mm")</span>
+        }
+    </div>
 
     @if (_prevision is not null)
     {
@@ -92,6 +117,8 @@
     protected override async Task OnInitializedAsync()
     {
         Sync.OnSyncCompletado += OnSyncCompletado;
+        Sync.OnEstadoCambiado += OnEstadoCambiado;
+        Drive.OnEstadoCambiado += OnEstadoCambiado;
         await Cargar();
     }
 
@@ -114,7 +141,14 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    public void Dispose() => Sync.OnSyncCompletado -= OnSyncCompletado;
+    private void OnEstadoCambiado() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Sync.OnSyncCompletado -= OnSyncCompletado;
+        Sync.OnEstadoCambiado -= OnEstadoCambiado;
+        Drive.OnEstadoCambiado -= OnEstadoCambiado;
+    }
 
     private string MesActual() =>
         new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)
