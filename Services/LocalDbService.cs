@@ -10,6 +10,7 @@ public class LocalDbService(IJSRuntime js)
     private const string KeyRecurrentes = "ha_recurrentes";
     private const string KeyCuentas = "ha_cuentas";
     private const string KeyCategorias = "ha_categorias";
+    private const string KeyEliminados = "ha_eliminados";
 
     private readonly JsonSerializerOptions _json = new() { PropertyNameCaseInsensitive = true };
 
@@ -45,6 +46,7 @@ public class LocalDbService(IJSRuntime js)
         var lista = await ObtenerMovimientosAsync();
         lista.RemoveAll(m => m.Id == id);
         await GuardarLista(KeyMovimientos, lista);
+        await MarcarEliminadoAsync(id);
     }
 
     public async Task<bool> ExisteMovimientoRecurrenteAsync(string recurrenteId, string periodo)
@@ -72,6 +74,7 @@ public class LocalDbService(IJSRuntime js)
         var lista = await ObtenerRecurrentesAsync();
         lista.RemoveAll(r => r.Id == id);
         await GuardarLista(KeyRecurrentes, lista);
+        await MarcarEliminadoAsync(id);
     }
 
     // --- Cuentas ---
@@ -114,6 +117,31 @@ public class LocalDbService(IJSRuntime js)
         var lista = await ObtenerCategoriasAsync();
         lista.RemoveAll(c => c.Id == id);
         await GuardarLista(KeyCategorias, lista);
+    }
+
+    // --- Eliminados (tombstones para sync) ---
+
+    public async Task<HashSet<string>> ObtenerEliminadosAsync()
+    {
+        var lista = await CargarLista<string>(KeyEliminados);
+        return lista.ToHashSet();
+    }
+
+    public async Task MarcarEliminadoAsync(string id)
+    {
+        var lista = await CargarLista<string>(KeyEliminados);
+        if (!lista.Contains(id))
+        {
+            lista.Add(id);
+            await GuardarLista(KeyEliminados, lista);
+        }
+    }
+
+    public async Task LimpiarEliminadoAsync(string id)
+    {
+        var lista = await CargarLista<string>(KeyEliminados);
+        lista.Remove(id);
+        await GuardarLista(KeyEliminados, lista);
     }
 
     // --- Inicializar datos por defecto ---

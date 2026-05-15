@@ -73,6 +73,7 @@ public class SyncService(DriveService drive, LocalDbService db)
         var archivosEnDrive = await drive.ListarArchivosAsync();
         var movimientosLocales = await db.ObtenerMovimientosAsync();
         var recurrentesLocales = await db.ObtenerRecurrentesAsync();
+        var eliminados = await db.ObtenerEliminadosAsync();
 
         var idsMovLocal = movimientosLocales.Select(m => m.Id).ToHashSet();
         var idsRecLocal = recurrentesLocales.Select(r => r.Id).ToHashSet();
@@ -82,6 +83,12 @@ public class SyncService(DriveService drive, LocalDbService db)
             if (archivo.Nombre.StartsWith("mov-") && archivo.Nombre.EndsWith(".json"))
             {
                 var guid = archivo.Nombre[4..^5];
+                if (eliminados.Contains(guid))
+                {
+                    await drive.EliminarArchivoAsync(archivo.Id);
+                    await db.LimpiarEliminadoAsync(guid);
+                    continue;
+                }
                 if (!idsMovLocal.Contains(guid))
                 {
                     var contenido = await drive.DescargarArchivoAsync(archivo.Id);
@@ -95,6 +102,12 @@ public class SyncService(DriveService drive, LocalDbService db)
             else if (archivo.Nombre.StartsWith("rec-") && archivo.Nombre.EndsWith(".json"))
             {
                 var guid = archivo.Nombre[4..^5];
+                if (eliminados.Contains(guid))
+                {
+                    await drive.EliminarArchivoAsync(archivo.Id);
+                    await db.LimpiarEliminadoAsync(guid);
+                    continue;
+                }
                 if (!idsRecLocal.Contains(guid))
                 {
                     var contenido = await drive.DescargarArchivoAsync(archivo.Id);
