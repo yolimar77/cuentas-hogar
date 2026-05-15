@@ -101,6 +101,22 @@ public class DriveService(IJSRuntime js, HttpClient http)
     public void OnAuthError(string error) =>
         _authTcs?.TrySetException(new Exception($"Error de autenticación: {error}"));
 
+    private async Task<bool> IntentarRefreshSilenciosoAsync()
+    {
+        try
+        {
+            var nuevoToken = await js.InvokeAsync<string>("gis.silentRefresh", TimeSpan.FromSeconds(15));
+            if (!string.IsNullOrEmpty(nuevoToken))
+            {
+                _token = nuevoToken;
+                await GuardarTokenAsync(nuevoToken);
+                return true;
+            }
+        }
+        catch { }
+        return false;
+    }
+
     public async Task DesconectarAsync()
     {
         if (_token != null)
@@ -138,6 +154,7 @@ public class DriveService(IJSRuntime js, HttpClient http)
             else if (verResp.StatusCode == System.Net.HttpStatusCode.Forbidden ||
                      verResp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
+                if (await IntentarRefreshSilenciosoAsync()) { _folderId = null; await ObtenerOCrearCarpetaAsync(); return; }
                 NecesitaReconectar = true;
                 OnEstadoCambiado?.Invoke();
                 return;
@@ -153,6 +170,7 @@ public class DriveService(IJSRuntime js, HttpClient http)
         if (searchResp.StatusCode == System.Net.HttpStatusCode.Forbidden ||
             searchResp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
+            if (await IntentarRefreshSilenciosoAsync()) { await ObtenerOCrearCarpetaAsync(); return; }
             NecesitaReconectar = true;
             OnEstadoCambiado?.Invoke();
             return;
@@ -227,10 +245,19 @@ public class DriveService(IJSRuntime js, HttpClient http)
 
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            _token = null;
-            try { await js.InvokeVoidAsync("storage.remove", TokenKey); } catch { }
-            OnEstadoCambiado?.Invoke();
-            throw new Exception("Token de Google expirado. Reconéctate en Ajustes.");
+            if (await IntentarRefreshSilenciosoAsync())
+            {
+                response = await EnviarAsync(HttpMethod.Get, url);
+                if (!response.IsSuccessStatusCode)
+                    throw new Exception($"Error Drive ({(int)response.StatusCode})");
+            }
+            else
+            {
+                _token = null;
+                try { await js.InvokeVoidAsync("storage.remove", TokenKey); } catch { }
+                OnEstadoCambiado?.Invoke();
+                throw new Exception("Token de Google expirado. Reconéctate en Ajustes.");
+            }
         }
 
         if (!response.IsSuccessStatusCode)

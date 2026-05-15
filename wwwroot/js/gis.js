@@ -67,6 +67,37 @@ window.gis = {
         return null;
     },
 
+    silentRefresh: () => {
+        const esMobil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if (esMobil) return Promise.reject('mobile');
+
+        return new Promise((resolve, reject) => {
+            if (typeof google === 'undefined' || !google.accounts) {
+                reject('gis_not_available');
+                return;
+            }
+            try {
+                const timeout = setTimeout(() => reject('timeout'), 12000);
+                const client = google.accounts.oauth2.initTokenClient({
+                    client_id: window.gis._clientId,
+                    scope: 'https://www.googleapis.com/auth/drive',
+                    callback: (resp) => {
+                        clearTimeout(timeout);
+                        if (resp.error) reject(resp.error);
+                        else resolve(resp.access_token);
+                    },
+                    error_callback: (err) => {
+                        clearTimeout(timeout);
+                        reject(err?.type ?? 'error');
+                    }
+                });
+                client.requestAccessToken({ prompt: '' });
+            } catch (e) {
+                reject(String(e));
+            }
+        });
+    },
+
     disconnect: (token) => {
         try {
             if (typeof google !== 'undefined' && google.accounts) {
