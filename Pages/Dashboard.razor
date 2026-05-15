@@ -11,10 +11,8 @@
     @if (_prevision is not null)
     {
         <div class="alert @AlertClass() mb-3" role="alert">
-            <div class="d-flex justify-content-between align-items-center">
-                <strong>@AlertIcono() @AlertMensaje()</strong>
-                <span class="fs-5 fw-bold">@_prevision.Margen.ToString("C")</span>
-            </div>
+            <strong>@AlertIcono() @AlertMensaje()</strong>
+            <div class="fs-4 fw-bold mt-1">@_prevision.Margen.ToString("C")</div>
             <div class="progress mt-2" style="height:6px">
                 <div class="progress-bar @BarraClass()" style="width:@Math.Min(_prevision.PorcentajeGasto,100)%"></div>
             </div>
