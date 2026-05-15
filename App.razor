@@ -2,6 +2,7 @@
 @inject LocalDbService Db
 @inject PrevisionService Prevision
 @inject DriveService Drive
+@inject NavigationManager Nav
 
 <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
@@ -20,6 +21,13 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
+        {
             await Drive.InicializarAsync();
+            if (Drive.VieneDriveRedirect)
+            {
+                Drive.VieneDriveRedirect = false;
+                Nav.NavigateTo("configuracion");
+            }
+        }
     }
 }

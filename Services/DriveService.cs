@@ -16,6 +16,7 @@ public class DriveService(IJSRuntime js, HttpClient http)
     private TaskCompletionSource<string>? _authTcs;
 
     public bool Conectado => _token != null;
+    public bool VieneDriveRedirect { get; set; } = false;
     public event Action? OnEstadoCambiado;
 
     // --- Inicializar GIS (llamar en OnAfterRenderAsync) ---
@@ -42,6 +43,7 @@ public class DriveService(IJSRuntime js, HttpClient http)
             if (!string.IsNullOrEmpty(token))
             {
                 _token = token;
+                VieneDriveRedirect = true;
                 OnEstadoCambiado?.Invoke();
             }
         }

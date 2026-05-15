@@ -4,6 +4,7 @@
 @inject LocalDbService Db
 @inject DriveService Drive
 @inject SyncService Sync
+@implements IDisposable
 
 <div class="container-sm py-3">
     <h5 class="mb-3">Configuración</h5>
@@ -124,7 +125,15 @@
     private Cuenta _nuevaCuenta = new();
     private Categoria _nuevaCategoria = new();
 
-    protected override async Task OnInitializedAsync() => await Cargar();
+    protected override async Task OnInitializedAsync()
+    {
+        Drive.OnEstadoCambiado += OnDriveEstadoCambiado;
+        await Cargar();
+    }
+
+    private void OnDriveEstadoCambiado() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Drive.OnEstadoCambiado -= OnDriveEstadoCambiado;
 
     private async Task Cargar()
     {
