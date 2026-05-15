@@ -77,7 +77,16 @@ public class SyncService(DriveService drive, LocalDbService db)
     private async Task<int> SubirPendientesAsync(List<DriveFileInfo> archivos, Dictionary<string, DateTime> indice)
     {
         int count = 0;
-        var driveIdx = archivos.ToDictionary(f => f.Nombre, f => f.Id);
+        // Drive permite duplicados con el mismo nombre; nos quedamos con el último y borramos el resto
+        var driveIdx = new Dictionary<string, string>();
+        var vistos = new Dictionary<string, string>();
+        foreach (var f in archivos)
+        {
+            if (vistos.TryGetValue(f.Nombre, out var anteriorId))
+                await drive.EliminarArchivoAsync(anteriorId);
+            vistos[f.Nombre] = f.Id;
+            driveIdx[f.Nombre] = f.Id;
+        }
 
         var movimientos = await db.ObtenerMovimientosAsync();
         foreach (var mov in movimientos.Where(m => !m.Sincronizado))
