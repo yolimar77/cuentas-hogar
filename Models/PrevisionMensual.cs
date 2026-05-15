@@ -5,19 +5,24 @@ public class PrevisionMensual
     public int Mes { get; set; }
     public int Anyo { get; set; }
 
+    // Plan mensual basado en recurrentes configurados
     public decimal IngresosRecurrentes { get; set; }
-    public decimal IngresosReales { get; set; }
-    public decimal IngresosTotales => IngresosRecurrentes + IngresosReales;
-
     public decimal GastosRecurrentes { get; set; }
+
+    // Lo que realmente ha ocurrido este mes (todos los movimientos)
+    public decimal IngresosReales { get; set; }
     public decimal GastosReales { get; set; }
-    public decimal GastosTotales => GastosRecurrentes + GastosReales;
 
-    public decimal Margen => IngresosTotales - GastosTotales;
+    // Aliases para las tarjetas "previstos" del Dashboard
+    public decimal IngresosTotales => IngresosRecurrentes;
+    public decimal GastosTotales => GastosRecurrentes;
 
-    public decimal PorcentajeGasto => IngresosTotales == 0
-        ? (GastosTotales == 0 ? 0 : 100)
-        : Math.Round(GastosTotales / IngresosTotales * 100, 1);
+    // Balance y alerta basados en lo real
+    public decimal Margen => IngresosReales - GastosReales;
+
+    public decimal PorcentajeGasto => IngresosReales == 0
+        ? (GastosReales == 0 ? 0 : 100)
+        : Math.Round(GastosReales / IngresosReales * 100, 1);
 
     public NivelAlerta Nivel => PorcentajeGasto switch
     {

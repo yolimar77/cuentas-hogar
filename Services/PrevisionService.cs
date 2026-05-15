@@ -10,7 +10,7 @@ public class PrevisionService(LocalDbService db)
         var recurrentes = await db.ObtenerRecurrentesAsync();
 
         var movMes = movimientos.Where(m =>
-            m.Fecha.Month == mes && m.Fecha.Year == anyo && m.RecurrenteId is null);
+            m.Fecha.Month == mes && m.Fecha.Year == anyo);
 
         var recActivosMes = recurrentes.Where(r => r.EstaActivoEnMes(mes, anyo));
 
