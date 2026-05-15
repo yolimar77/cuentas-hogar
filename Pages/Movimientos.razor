@@ -2,6 +2,7 @@
 @using HomeAccounts.Models
 @using HomeAccounts.Services
 @inject LocalDbService Db
+@inject SyncService Sync
 
 <div class="container-sm py-3">
 
@@ -141,12 +142,14 @@
         await Db.GuardarMovimientoAsync(_nuevo);
         await Cargar();
         _mostrarFormulario = false;
+        _ = Sync.SincronizarAsync();
     }
 
     private async Task Eliminar(string id)
     {
         await Db.EliminarMovimientoAsync(id);
         await Cargar();
+        _ = Sync.SincronizarAsync();
     }
 
     private void Cerrar() => _mostrarFormulario = false;
