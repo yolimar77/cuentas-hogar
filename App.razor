@@ -39,7 +39,10 @@
             }
 
             if (Drive.Conectado)
+            {
+                await Drive.ObtenerOCrearCarpetaAsync();
                 await Sync.SincronizarAsync();
+            }
         }
     }
 

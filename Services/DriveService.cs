@@ -10,35 +10,30 @@ public class DriveService(IJSRuntime js, HttpClient http)
     private const string ClientId = "871337897281-n7p8ibsf01vgi80k4fq28gqkibkh2n1i.apps.googleusercontent.com";
     private const string ApiBase = "https://www.googleapis.com/drive/v3";
     private const string UploadBase = "https://www.googleapis.com/upload/drive/v3";
+    private const string NombreCarpeta = "CuentasHogar";
+    private const string TokenKey = "ha_drive_token";
+    private const string FolderKey = "ha_folder_id";
 
     private string? _token;
+    private string? _folderId;
     private DotNetObjectReference<DriveService>? _ref;
     private TaskCompletionSource<string>? _authTcs;
 
-    private const string TokenKey = "ha_drive_token";
+    private const string RedirectUri = "https://yolimar77.github.io/cuentas-hogar/";
 
     public bool Conectado => _token != null;
     public bool VieneDriveRedirect { get; set; } = false;
+    public string? FolderId => _folderId;
     public event Action? OnEstadoCambiado;
 
-    // --- Inicializar GIS (llamar en OnAfterRenderAsync) ---
-
-    private const string RedirectUri = "https://yolimar77.github.io/cuentas-hogar/";
+    // --- Inicialización ---
 
     public async Task InicializarAsync()
     {
         _ref = DotNetObjectReference.Create(this);
+        try { await js.InvokeVoidAsync("gis.init", ClientId, RedirectUri, _ref); }
+        catch (Exception ex) { Console.WriteLine($"GIS init error: {ex.Message}"); }
 
-        try
-        {
-            await js.InvokeVoidAsync("gis.init", ClientId, RedirectUri, _ref);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"GIS init error: {ex.Message}");
-        }
-
-        // Comprobar si venimos de un redireccionamiento OAuth en móvil
         try
         {
             var redirectToken = await js.InvokeAsync<string?>("gis.checkRedirectToken");
@@ -48,32 +43,38 @@ public class DriveService(IJSRuntime js, HttpClient http)
                 await GuardarTokenAsync(redirectToken);
                 VieneDriveRedirect = true;
                 OnEstadoCambiado?.Invoke();
+                await CargarFolderIdAsync();
                 return;
             }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"checkRedirectToken error: {ex.Message}");
-        }
+        catch (Exception ex) { Console.WriteLine($"checkRedirectToken error: {ex.Message}"); }
 
-        // Cargar token guardado de sesión anterior
         try
         {
             var tokenGuardado = await js.InvokeAsync<string?>("storage.get", TokenKey);
-            if (!string.IsNullOrEmpty(tokenGuardado))
-                _token = tokenGuardado;
+            if (!string.IsNullOrEmpty(tokenGuardado)) _token = tokenGuardado;
+        }
+        catch { }
+
+        await CargarFolderIdAsync();
+    }
+
+    private async Task CargarFolderIdAsync()
+    {
+        try
+        {
+            var fid = await js.InvokeAsync<string?>("storage.get", FolderKey);
+            if (!string.IsNullOrEmpty(fid)) _folderId = fid;
         }
         catch { }
     }
 
-    // --- Conectar: popup en escritorio, redirección en móvil ---
+    // --- Autenticación ---
 
     public async Task ConectarAsync()
     {
         _authTcs = new TaskCompletionSource<string>();
         await js.InvokeVoidAsync("gis.connect");
-        // En móvil la página se redirige, no esperamos respuesta aquí
-        // En escritorio esperamos el callback
         try
         {
             var token = await _authTcs.Task.WaitAsync(TimeSpan.FromSeconds(120));
@@ -82,8 +83,6 @@ public class DriveService(IJSRuntime js, HttpClient http)
         }
         catch (TimeoutException) { }
     }
-
-    // --- Callbacks llamados desde JavaScript ---
 
     [JSInvokable]
     public async void OnAuthSuccess(string token)
@@ -97,12 +96,8 @@ public class DriveService(IJSRuntime js, HttpClient http)
         await js.InvokeVoidAsync("storage.set", TokenKey, token);
 
     [JSInvokable]
-    public void OnAuthError(string error)
-    {
+    public void OnAuthError(string error) =>
         _authTcs?.TrySetException(new Exception($"Error de autenticación: {error}"));
-    }
-
-    // --- Desconectar ---
 
     public async Task DesconectarAsync()
     {
@@ -115,12 +110,7 @@ public class DriveService(IJSRuntime js, HttpClient http)
 
     public async Task LimpiarTokenSiExpiradoAsync()
     {
-        // Si la lista de archivos falla, el token expiró — limpiar para que el usuario reconecte
-        try
-        {
-            var archivos = await ListarArchivosAsync();
-            _ = archivos; // solo verificamos que funciona
-        }
+        try { _ = await ListarArchivosAsync(); }
         catch
         {
             _token = null;
@@ -129,11 +119,68 @@ public class DriveService(IJSRuntime js, HttpClient http)
         }
     }
 
+    // --- Gestión de carpeta compartida ---
+
+    public async Task ObtenerOCrearCarpetaAsync()
+    {
+        if (!Conectado) return;
+        if (_folderId != null) return; // ya tenemos carpeta (propia o externa)
+
+        // Buscar carpeta existente por nombre
+        var q = Uri.EscapeDataString($"name='{NombreCarpeta}' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+        var searchResp = await EnviarAsync(HttpMethod.Get, $"{ApiBase}/files?q={q}&fields=files(id,name)");
+        if (searchResp.IsSuccessStatusCode)
+        {
+            var searchJson = await searchResp.Content.ReadAsStringAsync();
+            var doc = JsonDocument.Parse(searchJson);
+            var files = doc.RootElement.GetProperty("files").EnumerateArray().ToList();
+            if (files.Count > 0)
+            {
+                _folderId = files[0].GetProperty("id").GetString()!;
+                await js.InvokeVoidAsync("storage.set", FolderKey, _folderId);
+                return;
+            }
+        }
+
+        // Crear carpeta nueva
+        var body = JsonSerializer.Serialize(new { name = NombreCarpeta, mimeType = "application/vnd.google-apps.folder" });
+        var req = new HttpRequestMessage(HttpMethod.Post, $"{ApiBase}/files?fields=id");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+        req.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        var resp = await http.SendAsync(req);
+        if (resp.IsSuccessStatusCode)
+        {
+            var json = await resp.Content.ReadAsStringAsync();
+            _folderId = JsonDocument.Parse(json).RootElement.GetProperty("id").GetString()!;
+            await js.InvokeVoidAsync("storage.set", FolderKey, _folderId);
+        }
+    }
+
+    public async Task EstablecerCarpetaExternaAsync(string folderId)
+    {
+        _folderId = folderId.Trim();
+        await js.InvokeVoidAsync("storage.set", FolderKey, _folderId);
+    }
+
+    public async Task CompartirConAsync(string email)
+    {
+        if (_folderId == null || !Conectado) return;
+        var body = JsonSerializer.Serialize(new { role = "writer", type = "user", emailAddress = email });
+        var req = new HttpRequestMessage(HttpMethod.Post,
+            $"{ApiBase}/files/{_folderId}/permissions?sendNotificationEmail=false");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+        req.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        await http.SendAsync(req);
+    }
+
     // --- API de Drive ---
 
     public async Task<List<DriveFileInfo>> ListarArchivosAsync()
     {
-        var url = $"{ApiBase}/files?spaces=appDataFolder&fields=files(id,name)&pageSize=1000";
+        if (_folderId == null) return [];
+
+        var q = Uri.EscapeDataString($"'{_folderId}' in parents and trashed=false");
+        var url = $"{ApiBase}/files?q={q}&fields=files(id,name)&pageSize=1000";
         var response = await EnviarAsync(HttpMethod.Get, url);
 
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
@@ -159,8 +206,10 @@ public class DriveService(IJSRuntime js, HttpClient http)
 
     public async Task<bool> SubirArchivoAsync(string nombre, string contenidoJson)
     {
+        if (_folderId == null) return false;
+
         const string boundary = "ha_boundary_xyz";
-        var metadata = JsonSerializer.Serialize(new { name = nombre, parents = new[] { "appDataFolder" } });
+        var metadata = JsonSerializer.Serialize(new { name = nombre, parents = new[] { _folderId } });
 
         var body = new StringBuilder();
         body.Append($"--{boundary}\r\n");

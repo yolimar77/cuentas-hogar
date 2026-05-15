@@ -19,7 +19,7 @@ public class SyncService(DriveService drive, LocalDbService db)
 
     public async Task SincronizarAsync()
     {
-        if (!drive.Conectado || SincronizandoAhora) return;
+        if (!drive.Conectado || drive.FolderId == null || SincronizandoAhora) return;
         SincronizandoAhora = true;
         UltimoError = null;
 
@@ -53,6 +53,16 @@ public class SyncService(DriveService drive, LocalDbService db)
         {
             SincronizandoAhora = false;
         }
+    }
+
+    public async Task RestablecerTombstonesAsync()
+    {
+        await db.LimpiarTodosEliminadosAsync();
+        var archivos = await drive.ListarArchivosAsync();
+        var idx = new Dictionary<string, DriveFileInfo>();
+        foreach (var f in archivos) idx[f.Nombre] = f;
+        if (idx.TryGetValue(NombreDels, out var arc))
+            await drive.EliminarArchivoAsync(arc.Id);
     }
 
     // --- Movimientos ---

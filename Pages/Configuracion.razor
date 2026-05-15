@@ -4,6 +4,7 @@
 @inject LocalDbService Db
 @inject DriveService Drive
 @inject SyncService Sync
+@inject IJSRuntime JS
 @implements IDisposable
 
 <div class="container-sm py-3">
@@ -27,7 +28,7 @@
                 {
                     <p class="text-muted small mb-2">@Sync.UltimoDetalle</p>
                 }
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 flex-wrap">
                     <button class="btn btn-outline-primary btn-sm" @onclick="Sincronizar" disabled="@Sync.SincronizandoAhora">
                         @(Sync.SincronizandoAhora ? "Sincronizando..." : "Sincronizar ahora")
                     </button>
@@ -38,6 +39,55 @@
             {
                 <p class="text-muted small mb-2">No conectado. Conéctate para sincronizar entre dispositivos.</p>
                 <button class="btn btn-outline-primary btn-sm" @onclick="Conectar">Conectar con Google</button>
+            }
+        </div>
+    </div>
+
+    <!-- Acceso compartido (familia) -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <h6 class="card-title">Acceso compartido</h6>
+
+            @if (Drive.Conectado && Drive.FolderId != null)
+            {
+                <p class="text-muted small mb-1">Tu código de familia (compártelo con tu pareja):</p>
+                <div class="input-group input-group-sm mb-3">
+                    <input class="form-control font-monospace" readonly value="@Drive.FolderId" />
+                    <button class="btn btn-outline-secondary" @onclick="CopiarCodigo">Copiar</button>
+                </div>
+
+                <p class="text-muted small mb-1">Dar acceso a otro correo de Google:</p>
+                <div class="input-group input-group-sm mb-3">
+                    <input class="form-control" @bind="_emailCompartir" placeholder="correo@gmail.com" />
+                    <button class="btn btn-outline-primary" @onclick="CompartirCarpeta"
+                            disabled="@_compartiendoAhora">
+                        @(_compartiendoAhora ? "..." : "Compartir")
+                    </button>
+                </div>
+                @if (_mensajeCompartir is not null)
+                {
+                    <p class="small @(_errorCompartir ? "text-danger" : "text-success") mb-2">@_mensajeCompartir</p>
+                }
+            }
+
+            <p class="text-muted small mb-1">¿Tienes el código de otra cuenta? Úsalo aquí:</p>
+            <div class="input-group input-group-sm mb-2">
+                <input class="form-control font-monospace" @bind="_codigoExterno" placeholder="Pega el código de familia" />
+                <button class="btn btn-outline-secondary" @onclick="UsarCodigoExterno">Usar</button>
+            </div>
+            @if (_mensajeCodigo is not null)
+            {
+                <p class="small text-success mb-2">@_mensajeCodigo</p>
+            }
+
+            @if (Drive.Conectado)
+            {
+                <hr class="my-2" />
+                <p class="text-muted small mb-1">Si los datos no coinciden entre dispositivos, restablece la sincronización:</p>
+                <button class="btn btn-outline-warning btn-sm" @onclick="RestablecerSync"
+                        disabled="@_restableciendo">
+                    @(_restableciendo ? "Restableciendo..." : "Restablecer sincronización")
+                </button>
             }
         </div>
     </div>
@@ -132,6 +182,13 @@
     private bool _mostrarCategoria = false;
     private Cuenta _nuevaCuenta = new();
     private Categoria _nuevaCategoria = new();
+    private string _emailCompartir = "";
+    private string _codigoExterno = "";
+    private bool _compartiendoAhora = false;
+    private bool _restableciendo = false;
+    private string? _mensajeCompartir;
+    private bool _errorCompartir;
+    private string? _mensajeCodigo;
 
     protected override async Task OnInitializedAsync()
     {
@@ -141,7 +198,6 @@
     }
 
     private void OnDriveEstadoCambiado() => InvokeAsync(StateHasChanged);
-
     private Task OnSyncCompletado() => InvokeAsync(StateHasChanged);
 
     public void Dispose()
@@ -178,7 +234,65 @@
     private async Task EliminarCuenta(string id) { await Db.EliminarCuentaAsync(id); await Cargar(); }
     private async Task EliminarCategoria(string id) { await Db.EliminarCategoriaAsync(id); await Cargar(); }
 
-    private async Task Conectar() => await Drive.ConectarAsync();
+    private async Task Conectar()
+    {
+        await Drive.ConectarAsync();
+        if (Drive.Conectado)
+        {
+            await Drive.ObtenerOCrearCarpetaAsync();
+            await Sync.SincronizarAsync();
+        }
+    }
+
     private async Task Desconectar() => await Drive.DesconectarAsync();
     private async Task Sincronizar() => await Sync.SincronizarAsync();
+
+    private async Task CopiarCodigo()
+    {
+        if (Drive.FolderId is not null)
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", Drive.FolderId);
+    }
+
+    private async Task CompartirCarpeta()
+    {
+        if (string.IsNullOrWhiteSpace(_emailCompartir)) return;
+        _compartiendoAhora = true;
+        _mensajeCompartir = null;
+        try
+        {
+            await Drive.CompartirConAsync(_emailCompartir.Trim());
+            _mensajeCompartir = $"✅ Carpeta compartida con {_emailCompartir.Trim()}";
+            _errorCompartir = false;
+            _emailCompartir = "";
+        }
+        catch (Exception ex)
+        {
+            _mensajeCompartir = $"Error: {ex.Message}";
+            _errorCompartir = true;
+        }
+        finally { _compartiendoAhora = false; }
+    }
+
+    private async Task UsarCodigoExterno()
+    {
+        if (string.IsNullOrWhiteSpace(_codigoExterno)) return;
+        await Drive.EstablecerCarpetaExternaAsync(_codigoExterno.Trim());
+        _mensajeCodigo = "✅ Código guardado. Sincronizando...";
+        _codigoExterno = "";
+        StateHasChanged();
+        await Sync.SincronizarAsync();
+        _mensajeCodigo = null;
+    }
+
+    private async Task RestablecerSync()
+    {
+        _restableciendo = true;
+        StateHasChanged();
+        try
+        {
+            await Sync.RestablecerTombstonesAsync();
+            await Sync.SincronizarAsync();
+        }
+        finally { _restableciendo = false; }
+    }
 }

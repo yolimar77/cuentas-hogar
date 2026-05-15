@@ -144,6 +144,9 @@ public class LocalDbService(IJSRuntime js)
         await GuardarLista(KeyEliminados, lista);
     }
 
+    public async Task LimpiarTodosEliminadosAsync() =>
+        await GuardarLista(KeyEliminados, new List<string>());
+
     // --- Inicializar datos por defecto ---
 
     public async Task InicializarDatosDefaultAsync()

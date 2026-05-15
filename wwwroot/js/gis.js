@@ -22,7 +22,7 @@ window.gis = {
             if (typeof google !== 'undefined' && google.accounts) {
                 window.gis._popupClient = google.accounts.oauth2.initTokenClient({
                     client_id: clientId,
-                    scope: 'https://www.googleapis.com/auth/drive.appdata',
+                    scope: 'https://www.googleapis.com/auth/drive',
                     callback: (response) => {
                         if (response.error) {
                             window.gis._dotNetRef.invokeMethodAsync('OnAuthError', response.error);
@@ -45,7 +45,7 @@ window.gis = {
                 client_id: window.gis._clientId,
                 redirect_uri: window.gis._redirectUri,
                 response_type: 'token',
-                scope: 'https://www.googleapis.com/auth/drive.appdata'
+                scope: 'https://www.googleapis.com/auth/drive'
             });
             window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
         } else if (window.gis._popupClient) {
