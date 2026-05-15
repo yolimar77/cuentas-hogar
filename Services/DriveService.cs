@@ -20,20 +20,37 @@ public class DriveService(IJSRuntime js, HttpClient http)
 
     // --- Inicializar GIS (llamar en OnAfterRenderAsync) ---
 
+    private const string RedirectUri = "https://yolimar77.github.io/cuentas-hogar/";
+
     public async Task InicializarAsync()
     {
         _ref = DotNetObjectReference.Create(this);
-        await js.InvokeVoidAsync("gis.init", ClientId, _ref);
+        await js.InvokeVoidAsync("gis.init", ClientId, RedirectUri, _ref);
+
+        // Comprobar si venimos de un redireccionamiento OAuth en móvil
+        var token = await js.InvokeAsync<string?>("gis.checkRedirectToken");
+        if (!string.IsNullOrEmpty(token))
+        {
+            _token = token;
+            OnEstadoCambiado?.Invoke();
+        }
     }
 
-    // --- Conectar: abre la ventana de Google directamente desde JS ---
+    // --- Conectar: popup en escritorio, redirección en móvil ---
 
     public async Task ConectarAsync()
     {
         _authTcs = new TaskCompletionSource<string>();
         await js.InvokeVoidAsync("gis.connect");
-        _token = await _authTcs.Task;
-        OnEstadoCambiado?.Invoke();
+        // En móvil la página se redirige, no esperamos respuesta aquí
+        // En escritorio esperamos el callback
+        try
+        {
+            var token = await _authTcs.Task.WaitAsync(TimeSpan.FromSeconds(120));
+            _token = token;
+            OnEstadoCambiado?.Invoke();
+        }
+        catch (TimeoutException) { }
     }
 
     // --- Callbacks llamados desde JavaScript ---

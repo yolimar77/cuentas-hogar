@@ -1,10 +1,12 @@
 window.gis = {
     _dotNetRef: null,
-    _tokenClient: null,
+    _popupClient: null,
+    _redirectClient: null,
 
-    init: (clientId, dotNetRef) => {
+    init: (clientId, redirectUri, dotNetRef) => {
         window.gis._dotNetRef = dotNetRef;
-        window.gis._tokenClient = google.accounts.oauth2.initTokenClient({
+
+        window.gis._popupClient = google.accounts.oauth2.initTokenClient({
             client_id: clientId,
             scope: 'https://www.googleapis.com/auth/drive.appdata',
             callback: (response) => {
@@ -15,19 +17,38 @@ window.gis = {
                 }
             }
         });
+
+        window.gis._redirectClient = google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: 'https://www.googleapis.com/auth/drive.appdata',
+            ux_mode: 'redirect',
+            redirect_uri: redirectUri,
+            callback: () => {}
+        });
     },
 
     connect: () => {
-        if (window.gis._tokenClient) {
-            window.gis._tokenClient.requestAccessToken();
+        const esMobil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if (esMobil) {
+            window.gis._redirectClient.requestAccessToken();
         } else {
-            console.error('GIS no inicializado');
+            window.gis._popupClient.requestAccessToken();
         }
+    },
+
+    checkRedirectToken: () => {
+        const hash = window.location.hash;
+        if (!hash) return null;
+        const params = new URLSearchParams(hash.substring(1));
+        const token = params.get('access_token');
+        if (token) {
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+            return token;
+        }
+        return null;
     },
 
     disconnect: (token) => {
         google.accounts.oauth2.revoke(token, () => {});
-        window.gis._tokenClient = null;
-        window.gis._dotNetRef = null;
     }
 };
