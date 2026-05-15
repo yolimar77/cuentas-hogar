@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Cuentas del hogar</title>
+    <script>
+        // Redirige rutas de SPA a index.html preservando la ruta como parámetro
+        var path = window.location.pathname.slice('/cuentas-hogar'.length) || '/';
+        window.location.replace('/cuentas-hogar/?r=' + encodeURIComponent(path));
+    </script>
+</head>
+<body></body>
+</html>

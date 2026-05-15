@@ -1,0 +1,136 @@
+@page "/"
+@using HomeAccounts.Models
+@using HomeAccounts.Services
+@inject LocalDbService Db
+@inject PrevisionService Prevision
+
+<div class="container-sm py-3">
+
+    @if (_prevision is not null)
+    {
+        <div class="alert @AlertClass() mb-3" role="alert">
+            <div class="d-flex justify-content-between align-items-center">
+                <strong>@AlertIcono() @AlertMensaje()</strong>
+                <span class="fs-5 fw-bold">@_prevision.Margen.ToString("C")</span>
+            </div>
+            <div class="progress mt-2" style="height:6px">
+                <div class="progress-bar @BarraClass()" style="width:@Math.Min(_prevision.PorcentajeGasto,100)%"></div>
+            </div>
+            <small class="text-muted">@_prevision.PorcentajeGasto% de los ingresos comprometido</small>
+        </div>
+    }
+
+    <h5 class="text-muted mb-3">@MesActual()</h5>
+
+    <div class="row g-2 mb-4">
+        <div class="col-6">
+            <div class="card text-bg-success">
+                <div class="card-body py-2">
+                    <div class="small">Ingresos previstos</div>
+                    <div class="fs-5 fw-bold">@(_prevision?.IngresosTotales.ToString("C") ?? "...")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="card text-bg-danger">
+                <div class="card-body py-2">
+                    <div class="small">Gastos previstos</div>
+                    <div class="fs-5 fw-bold">@(_prevision?.GastosTotales.ToString("C") ?? "...")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="card">
+                <div class="card-body py-2">
+                    <div class="small text-muted">Ingresos reales</div>
+                    <div class="fw-bold text-success">@(_prevision?.IngresosReales.ToString("C") ?? "...")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="card">
+                <div class="card-body py-2">
+                    <div class="small text-muted">Gastos reales</div>
+                    <div class="fw-bold text-danger">@(_prevision?.GastosReales.ToString("C") ?? "...")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h6 class="text-muted">Últimos movimientos</h6>
+    @if (_ultimos.Count == 0)
+    {
+        <p class="text-muted small">Aún no hay movimientos este mes.</p>
+    }
+    else
+    {
+        <ul class="list-group list-group-flush">
+            @foreach (var mov in _ultimos)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <div>
+                        <div>@mov.Concepto</div>
+                        <small class="text-muted">@mov.Fecha.ToString("dd/MM")</small>
+                    </div>
+                    <span class="fw-bold @(mov.Tipo == TipoMovimiento.Ingreso ? "text-success" : "text-danger")">
+                        @(mov.Tipo == TipoMovimiento.Ingreso ? "+" : "-")@mov.Importe.ToString("C")
+                    </span>
+                </li>
+            }
+        </ul>
+        <div class="text-end mt-1">
+            <a href="/movimientos" class="small">Ver todos</a>
+        </div>
+    }
+
+</div>
+
+@code {
+    private PrevisionMensual? _prevision;
+    private List<Movimiento> _ultimos = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var hoy = DateTime.Today;
+        _prevision = await Prevision.CalcularAsync(hoy.Month, hoy.Year);
+
+        var todos = await Db.ObtenerMovimientosAsync();
+        _ultimos = todos
+            .Where(m => m.Fecha.Month == hoy.Month && m.Fecha.Year == hoy.Year)
+            .OrderByDescending(m => m.Fecha)
+            .Take(5)
+            .ToList();
+    }
+
+    private string MesActual() =>
+        new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)
+            .ToString("MMMM yyyy", new System.Globalization.CultureInfo("es-ES"));
+
+    private string AlertClass() => _prevision?.Nivel switch
+    {
+        NivelAlerta.Aviso   => "alert-warning",
+        NivelAlerta.Peligro => "alert-danger",
+        _                   => "alert-success"
+    };
+
+    private string BarraClass() => _prevision?.Nivel switch
+    {
+        NivelAlerta.Aviso   => "bg-warning",
+        NivelAlerta.Peligro => "bg-danger",
+        _                   => "bg-success"
+    };
+
+    private string AlertIcono() => _prevision?.Nivel switch
+    {
+        NivelAlerta.Aviso   => "⚠️",
+        NivelAlerta.Peligro => "🔴",
+        _                   => "✅"
+    };
+
+    private string AlertMensaje() => _prevision?.Nivel switch
+    {
+        NivelAlerta.Aviso   => "Atención: superas el 80% de tus ingresos previstos",
+        NivelAlerta.Peligro => $"Los gastos superan los ingresos en {Math.Abs(_prevision.Margen):C}",
+        _                   => $"Margen disponible este mes"
+    };
+}

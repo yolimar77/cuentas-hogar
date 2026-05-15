@@ -1,0 +1,33 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+
+<main class="pb-5">
+    @Body
+</main>
+
+<nav class="navbar fixed-bottom navbar-light bg-white border-top">
+    <div class="container-fluid justify-content-around">
+        <a href="/" class="nav-link text-center @(EsRuta("/") ? "text-primary fw-bold" : "text-secondary")">
+            <div>🏠</div><small>Inicio</small>
+        </a>
+        <a href="/movimientos" class="nav-link text-center @(EsRuta("/movimientos") ? "text-primary fw-bold" : "text-secondary")">
+            <div>💳</div><small>Movimientos</small>
+        </a>
+        <a href="/recurrentes" class="nav-link text-center @(EsRuta("/recurrentes") ? "text-primary fw-bold" : "text-secondary")">
+            <div>🔁</div><small>Recurrentes</small>
+        </a>
+        <a href="/configuracion" class="nav-link text-center @(EsRuta("/configuracion") ? "text-primary fw-bold" : "text-secondary")">
+            <div>⚙️</div><small>Ajustes</small>
+        </a>
+    </div>
+</nav>
+
+@code {
+    private bool EsRuta(string ruta)
+    {
+        var path = new Uri(Nav.Uri).AbsolutePath.TrimEnd('/');
+        var base_ = new Uri(Nav.BaseUri).AbsolutePath.TrimEnd('/');
+        var relativa = path.StartsWith(base_) ? path[base_.Length..] : path;
+        return relativa == ruta || (ruta == "/" && relativa == "");
+    }
+}

@@ -1,0 +1,176 @@
+@page "/recurrentes"
+@using HomeAccounts.Models
+@using HomeAccounts.Services
+@inject LocalDbService Db
+@inject PrevisionService Prevision
+
+<div class="container-sm py-3">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">Pagos recurrentes</h5>
+        <button class="btn btn-primary btn-sm" @onclick="AbrirNuevo">+ Nuevo</button>
+    </div>
+
+    @if (_ingresos.Count > 0)
+    {
+        <h6 class="text-success">Ingresos fijos</h6>
+        <ul class="list-group list-group-flush mb-3">
+            @foreach (var rec in _ingresos)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <div>
+                        <div>@rec.Concepto</div>
+                        <small class="text-muted">Día @rec.DiaDelMes · hasta @rec.FechaFin.ToString("MM/yyyy")</small>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fw-bold text-success">+@rec.Importe.ToString("C")</span>
+                        <button class="btn btn-link btn-sm text-danger p-0" @onclick="() => Eliminar(rec.Id)">🗑</button>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+
+    @if (_gastos.Count > 0)
+    {
+        <h6 class="text-danger">Gastos fijos</h6>
+        <ul class="list-group list-group-flush mb-3">
+            @foreach (var rec in _gastos)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <div>
+                        <div>@rec.Concepto</div>
+                        <small class="text-muted">Día @rec.DiaDelMes · hasta @rec.FechaFin.ToString("MM/yyyy")</small>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fw-bold text-danger">-@rec.Importe.ToString("C")</span>
+                        <button class="btn btn-link btn-sm text-danger p-0" @onclick="() => Eliminar(rec.Id)">🗑</button>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+
+    @if (_ingresos.Count == 0 && _gastos.Count == 0)
+    {
+        <p class="text-muted small">Aún no hay pagos recurrentes configurados.</p>
+    }
+
+</div>
+
+@if (_mostrarFormulario)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">Nuevo pago recurrente</h6>
+                    <button class="btn-close" @onclick="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small">Tipo</label>
+                        <div class="btn-group w-100">
+                            <button class="btn @(_nuevo.Tipo == TipoMovimiento.Gasto ? "btn-danger" : "btn-outline-danger")"
+                                    @onclick="() => _nuevo.Tipo = TipoMovimiento.Gasto">Gasto</button>
+                            <button class="btn @(_nuevo.Tipo == TipoMovimiento.Ingreso ? "btn-success" : "btn-outline-success")"
+                                    @onclick="() => _nuevo.Tipo = TipoMovimiento.Ingreso">Ingreso</button>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Concepto</label>
+                        <input class="form-control" @bind="_nuevo.Concepto" placeholder="Nómina, Letra coche..." />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Importe mensual (€)</label>
+                        <input class="form-control" type="number" step="0.01" @bind="_nuevo.Importe" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Día del mes</label>
+                        <input class="form-control" type="number" min="1" max="31" @bind="_nuevo.DiaDelMes" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Desde</label>
+                        <input class="form-control" type="date" @bind="_nuevo.FechaInicio" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Hasta (fecha fin)</label>
+                        <input class="form-control" type="date" @bind="_nuevo.FechaFin" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Categoría</label>
+                        <select class="form-select" @bind="_nuevo.CategoriaId">
+                            <option value="">Sin categoría</option>
+                            @foreach (var cat in _categorias.Where(c => c.Tipo == _nuevo.Tipo))
+                            {
+                                <option value="@cat.Id">@cat.Icono @cat.Nombre</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Cuenta</label>
+                        <select class="form-select" @bind="_nuevo.CuentaId">
+                            @foreach (var cuenta in _cuentas)
+                            {
+                                <option value="@cuenta.Id">@cuenta.Nombre</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-sm" @onclick="Cerrar">Cancelar</button>
+                    <button class="btn btn-primary btn-sm" @onclick="Guardar">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MovimientoRecurrente> _ingresos = [];
+    private List<MovimientoRecurrente> _gastos = [];
+    private List<Categoria> _categorias = [];
+    private List<Cuenta> _cuentas = [];
+    private bool _mostrarFormulario = false;
+    private MovimientoRecurrente _nuevo = new();
+
+    protected override async Task OnInitializedAsync() => await Cargar();
+
+    private async Task Cargar()
+    {
+        var todos = await Db.ObtenerRecurrentesAsync();
+        _ingresos = todos.Where(r => r.Tipo == TipoMovimiento.Ingreso && r.Activo).ToList();
+        _gastos = todos.Where(r => r.Tipo == TipoMovimiento.Gasto && r.Activo).ToList();
+        _categorias = await Db.ObtenerCategoriasAsync();
+        _cuentas = await Db.ObtenerCuentasAsync();
+    }
+
+    private void AbrirNuevo()
+    {
+        _nuevo = new MovimientoRecurrente
+        {
+            Tipo = TipoMovimiento.Gasto,
+            FechaInicio = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
+            FechaFin = DateTime.Today.AddYears(1)
+        };
+        if (_cuentas.Count > 0) _nuevo.CuentaId = _cuentas[0].Id;
+        _mostrarFormulario = true;
+    }
+
+    private async Task Guardar()
+    {
+        if (string.IsNullOrWhiteSpace(_nuevo.Concepto) || _nuevo.Importe <= 0) return;
+        await Db.GuardarRecurrenteAsync(_nuevo);
+        await Prevision.GenerarMovimientosRecurrentesAsync();
+        await Cargar();
+        _mostrarFormulario = false;
+    }
+
+    private async Task Eliminar(string id)
+    {
+        await Db.EliminarRecurrenteAsync(id);
+        await Cargar();
+    }
+
+    private void Cerrar() => _mostrarFormulario = false;
+}

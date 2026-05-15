@@ -1,0 +1,160 @@
+@page "/configuracion"
+@using HomeAccounts.Models
+@using HomeAccounts.Services
+@inject LocalDbService Db
+@inject DriveService Drive
+@inject SyncService Sync
+
+<div class="container-sm py-3">
+    <h5 class="mb-3">Configuración</h5>
+
+    <!-- Google Drive -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <h6 class="card-title">Google Drive</h6>
+            @if (Drive.Conectado)
+            {
+                <p class="text-success small mb-1">✅ Conectado como @Drive.Email</p>
+                <p class="text-muted small mb-2">
+                    Última sincronización: @(Sync.UltimaSincronizacion?.ToString("dd/MM HH:mm") ?? "nunca")
+                </p>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary btn-sm" @onclick="Sincronizar" disabled="@Sync.SincronizandoAhora">
+                        @(Sync.SincronizandoAhora ? "Sincronizando..." : "Sincronizar ahora")
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" @onclick="Desconectar">Desconectar</button>
+                </div>
+            }
+            else
+            {
+                <p class="text-muted small mb-2">No conectado. Conéctate para sincronizar entre dispositivos.</p>
+                <button class="btn btn-outline-primary btn-sm" @onclick="Conectar">Conectar con Google</button>
+            }
+        </div>
+    </div>
+
+    <!-- Cuentas -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="card-title mb-0">Cuentas</h6>
+                <button class="btn btn-outline-primary btn-sm" @onclick="AbrirNuevaCuenta">+ Añadir</button>
+            </div>
+            @foreach (var cuenta in _cuentas)
+            {
+                <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+                    <span>@cuenta.Nombre</span>
+                    <button class="btn btn-link btn-sm text-danger p-0" @onclick="() => EliminarCuenta(cuenta.Id)">🗑</button>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Categorías -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="card-title mb-0">Categorías</h6>
+                <button class="btn btn-outline-primary btn-sm" @onclick="AbrirNuevaCategoria">+ Añadir</button>
+            </div>
+            @foreach (var cat in _categorias)
+            {
+                <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+                    <span>@cat.Icono @cat.Nombre <small class="text-muted">(@(cat.Tipo == TipoMovimiento.Ingreso ? "ingreso" : "gasto"))</small></span>
+                    <button class="btn btn-link btn-sm text-danger p-0" @onclick="() => EliminarCategoria(cat.Id)">🗑</button>
+                </div>
+            }
+        </div>
+    </div>
+
+</div>
+
+@if (_mostrarCuenta)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header"><h6 class="modal-title">Nueva cuenta</h6><button class="btn-close" @onclick="() => _mostrarCuenta = false"></button></div>
+                <div class="modal-body">
+                    <input class="form-control mb-2" @bind="_nuevaCuenta.Nombre" placeholder="Nombre de la cuenta" />
+                    <input class="form-control" type="number" step="0.01" @bind="_nuevaCuenta.SaldoInicial" placeholder="Saldo inicial (€)" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-sm" @onclick="() => _mostrarCuenta = false">Cancelar</button>
+                    <button class="btn btn-primary btn-sm" @onclick="GuardarCuenta">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_mostrarCategoria)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header"><h6 class="modal-title">Nueva categoría</h6><button class="btn-close" @onclick="() => _mostrarCategoria = false"></button></div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small">Tipo</label>
+                        <div class="btn-group w-100">
+                            <button class="btn @(_nuevaCategoria.Tipo == TipoMovimiento.Gasto ? "btn-danger" : "btn-outline-danger")"
+                                    @onclick="() => _nuevaCategoria.Tipo = TipoMovimiento.Gasto">Gasto</button>
+                            <button class="btn @(_nuevaCategoria.Tipo == TipoMovimiento.Ingreso ? "btn-success" : "btn-outline-success")"
+                                    @onclick="() => _nuevaCategoria.Tipo = TipoMovimiento.Ingreso">Ingreso</button>
+                        </div>
+                    </div>
+                    <input class="form-control mb-2" @bind="_nuevaCategoria.Nombre" placeholder="Nombre" />
+                    <input class="form-control" @bind="_nuevaCategoria.Icono" placeholder="Emoji (ej: 🛒)" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-sm" @onclick="() => _mostrarCategoria = false">Cancelar</button>
+                    <button class="btn btn-primary btn-sm" @onclick="GuardarCategoria">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Cuenta> _cuentas = [];
+    private List<Categoria> _categorias = [];
+    private bool _mostrarCuenta = false;
+    private bool _mostrarCategoria = false;
+    private Cuenta _nuevaCuenta = new();
+    private Categoria _nuevaCategoria = new();
+
+    protected override async Task OnInitializedAsync() => await Cargar();
+
+    private async Task Cargar()
+    {
+        _cuentas = await Db.ObtenerCuentasAsync();
+        _categorias = await Db.ObtenerCategoriasAsync();
+    }
+
+    private void AbrirNuevaCuenta() { _nuevaCuenta = new Cuenta(); _mostrarCuenta = true; }
+    private void AbrirNuevaCategoria() { _nuevaCategoria = new Categoria(); _mostrarCategoria = true; }
+
+    private async Task GuardarCuenta()
+    {
+        if (string.IsNullOrWhiteSpace(_nuevaCuenta.Nombre)) return;
+        await Db.GuardarCuentaAsync(_nuevaCuenta);
+        await Cargar();
+        _mostrarCuenta = false;
+    }
+
+    private async Task GuardarCategoria()
+    {
+        if (string.IsNullOrWhiteSpace(_nuevaCategoria.Nombre)) return;
+        await Db.GuardarCategoriaAsync(_nuevaCategoria);
+        await Cargar();
+        _mostrarCategoria = false;
+    }
+
+    private async Task EliminarCuenta(string id) { await Db.EliminarCuentaAsync(id); await Cargar(); }
+    private async Task EliminarCategoria(string id) { await Db.EliminarCategoriaAsync(id); await Cargar(); }
+
+    private async Task Conectar() => await Drive.ConectarAsync();
+    private async Task Desconectar() => await Drive.DesconectarAsync();
+    private async Task Sincronizar() => await Sync.SincronizarAsync();
+}
