@@ -1,6 +1,7 @@
 @using HomeAccounts.Services
 @inject LocalDbService Db
 @inject PrevisionService Prevision
+@inject DriveService Drive
 
 <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
@@ -14,5 +15,11 @@
     {
         await Db.InicializarDatosDefaultAsync();
         await Prevision.GenerarMovimientosRecurrentesAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await Drive.InicializarAsync();
     }
 }
