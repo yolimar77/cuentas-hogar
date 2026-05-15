@@ -9,14 +9,14 @@
 
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h5 class="mb-0">Movimientos</h5>
-        <button class="btn btn-primary btn-sm" @onclick="AbrirNuevo">+ Nuevo</button>
+        <button class="btn btn-primary btn-sm" @onclick="AbrirNuevo"><i class="ph-bold ph-plus"></i> Nuevo</button>
     </div>
 
     <!-- Filtro de mes -->
     <div class="d-flex gap-2 mb-3 align-items-center">
-        <button class="btn btn-outline-secondary btn-sm" @onclick="MesAnterior">‹</button>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="MesAnterior"><i class="ph-bold ph-caret-left"></i></button>
         <span class="flex-grow-1 text-center fw-bold">@MesTexto()</span>
-        <button class="btn btn-outline-secondary btn-sm" @onclick="MesSiguiente">›</button>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="MesSiguiente"><i class="ph-bold ph-caret-right"></i></button>
     </div>
 
     @if (_movimientos.Count == 0)
@@ -30,7 +30,7 @@
             {
                 <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                     <div>
-                        <div>@mov.Concepto @(mov.RecurrenteId is not null ? "🔁" : "")</div>
+                        <div>@mov.Concepto @(mov.RecurrenteId is not null ? new MarkupString("<i class=\"ph-bold ph-repeat\" style=\"font-size:0.8rem;opacity:0.6\"></i>") : new MarkupString(""))</div>
                         <small class="text-muted">@mov.Fecha.ToString("dd/MM") · @NombreCategoria(mov.CategoriaId)</small>
                     </div>
                     <div class="d-flex align-items-center gap-2">
@@ -39,8 +39,8 @@
                         </span>
                         @if (mov.RecurrenteId is null)
                         {
-                            <button class="btn btn-link btn-sm text-secondary p-0" @onclick="() => AbrirEditar(mov)">✏️</button>
-                            <button class="btn btn-link btn-sm text-danger p-0" @onclick="() => Eliminar(mov.Id)">🗑</button>
+                            <button class="btn btn-link btn-sm text-secondary p-0" @onclick="() => AbrirEditar(mov)"><i class="ph-bold ph-pencil-simple" style="font-size:1.1rem"></i></button>
+                            <button class="btn btn-link btn-sm text-danger p-0" @onclick="() => Eliminar(mov.Id)"><i class="ph-bold ph-trash" style="font-size:1.1rem"></i></button>
                         }
                     </div>
                 </li>

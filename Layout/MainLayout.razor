@@ -7,7 +7,7 @@
 @if (Drive.NecesitaReconectar)
 {
     <div class="bg-warning text-dark px-3 py-2 d-flex justify-content-between align-items-center" style="font-size:0.85rem">
-        <span>⚠️ Permisos de Google actualizados</span>
+        <span><i class="ph-bold ph-warning"></i> Permisos de Google actualizados</span>
         <a href="configuracion" class="btn btn-sm btn-dark">Reconectar</a>
     </div>
 }
@@ -19,16 +19,16 @@
 <nav class="navbar fixed-bottom navbar-light bg-white border-top">
     <div class="container-fluid justify-content-around">
         <a href="" class="nav-link text-center @(EsRuta("/") ? "text-primary fw-bold" : "text-secondary")">
-            <div>🏠</div><small>Inicio</small>
+            <div><i class="ph-bold ph-house" style="font-size:1.4rem"></i></div><small>Inicio</small>
         </a>
         <a href="movimientos" class="nav-link text-center @(EsRuta("/movimientos") ? "text-primary fw-bold" : "text-secondary")">
-            <div>💳</div><small>Movimientos</small>
+            <div><i class="ph-bold ph-credit-card" style="font-size:1.4rem"></i></div><small>Movimientos</small>
         </a>
         <a href="recurrentes" class="nav-link text-center @(EsRuta("/recurrentes") ? "text-primary fw-bold" : "text-secondary")">
-            <div>🔁</div><small>Recurrentes</small>
+            <div><i class="ph-bold ph-arrows-clockwise" style="font-size:1.4rem"></i></div><small>Recurrentes</small>
         </a>
         <a href="configuracion" class="nav-link text-center @(EsRuta("/configuracion") ? "text-primary fw-bold" : "text-secondary")">
-            <div>⚙️</div><small>Ajustes</small>
+            <div><i class="ph-bold ph-gear" style="font-size:1.4rem"></i></div><small>Ajustes</small>
         </a>
     </div>
 </nav>

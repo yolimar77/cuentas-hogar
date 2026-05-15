@@ -113,3 +113,12 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+@keyframes ph-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.ph-spin {
+    display: inline-block;
+    animation: ph-spin 1s linear infinite;
+}
