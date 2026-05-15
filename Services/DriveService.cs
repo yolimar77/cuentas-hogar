@@ -25,14 +25,29 @@ public class DriveService(IJSRuntime js, HttpClient http)
     public async Task InicializarAsync()
     {
         _ref = DotNetObjectReference.Create(this);
-        await js.InvokeVoidAsync("gis.init", ClientId, RedirectUri, _ref);
 
-        // Comprobar si venimos de un redireccionamiento OAuth en móvil
-        var token = await js.InvokeAsync<string?>("gis.checkRedirectToken");
-        if (!string.IsNullOrEmpty(token))
+        try
         {
-            _token = token;
-            OnEstadoCambiado?.Invoke();
+            await js.InvokeVoidAsync("gis.init", ClientId, RedirectUri, _ref);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"GIS init error: {ex.Message}");
+        }
+
+        // Siempre comprobar si venimos de un redireccionamiento OAuth en móvil
+        try
+        {
+            var token = await js.InvokeAsync<string?>("gis.checkRedirectToken");
+            if (!string.IsNullOrEmpty(token))
+            {
+                _token = token;
+                OnEstadoCambiado?.Invoke();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"checkRedirectToken error: {ex.Message}");
         }
     }
 
