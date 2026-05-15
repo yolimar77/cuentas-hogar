@@ -11,6 +11,7 @@ public class SyncService(DriveService drive, LocalDbService db)
     public bool SincronizandoAhora { get; private set; } = false;
     public DateTime? UltimaSincronizacion { get; private set; }
     public string? UltimoError { get; private set; }
+    public string? UltimoDetalle { get; private set; }
 
     public event Func<Task>? OnSyncCompletado;
 
@@ -23,10 +24,11 @@ public class SyncService(DriveService drive, LocalDbService db)
         try
         {
             var archivosEnDrive = await drive.ListarArchivosAsync();
-            await SubirPendientesAsync();
-            await SincronizarEliminacionesAsync(archivosEnDrive);
-            await DescargarNuevosAsync(archivosEnDrive);
+            int subidos = await SubirPendientesAsync();
+            int eliminados = await SincronizarEliminacionesAsync(archivosEnDrive);
+            int descargados = await DescargarNuevosAsync(archivosEnDrive);
             UltimaSincronizacion = DateTime.Now;
+            UltimoDetalle = $"↑{subidos} ↓{descargados} 🗑{eliminados} | Drive: {archivosEnDrive.Count} archivos";
             if (OnSyncCompletado is not null)
                 await OnSyncCompletado.Invoke();
         }
@@ -42,8 +44,9 @@ public class SyncService(DriveService drive, LocalDbService db)
 
     // --- Subir lo que tenemos en local y no está en Drive ---
 
-    private async Task SubirPendientesAsync()
+    private async Task<int> SubirPendientesAsync()
     {
+        int count = 0;
         var movimientos = await db.ObtenerMovimientosAsync();
         foreach (var mov in movimientos.Where(m => !m.Sincronizado))
         {
@@ -53,6 +56,7 @@ public class SyncService(DriveService drive, LocalDbService db)
             {
                 mov.Sincronizado = true;
                 await db.GuardarMovimientoAsync(mov);
+                count++;
             }
         }
 
@@ -65,14 +69,17 @@ public class SyncService(DriveService drive, LocalDbService db)
             {
                 rec.Sincronizado = true;
                 await db.GuardarRecurrenteAsync(rec);
+                count++;
             }
         }
+        return count;
     }
 
     // --- Propagar eliminaciones entre dispositivos ---
 
-    private async Task SincronizarEliminacionesAsync(List<DriveFileInfo> archivosEnDrive)
+    private async Task<int> SincronizarEliminacionesAsync(List<DriveFileInfo> archivosEnDrive)
     {
+        int aplicados = 0;
         var eliminadosLocales = await db.ObtenerEliminadosAsync();
 
         // Leer deletions.json de Drive si existe
@@ -95,14 +102,15 @@ public class SyncService(DriveService drive, LocalDbService db)
             {
                 await db.EliminarMovimientoAsync(id);
                 await db.EliminarRecurrenteAsync(id);
+                aplicados++;
             }
         }
 
         // Fusionar y subir la lista actualizada a Drive si hay cambios
-        var todos = eliminadosLocales.Union(eliminadosDrive).ToList();
+        var todos = eliminadosLocales.Union(eliminadosDrive).ToHashSet();
         if (todos.Count > 0)
         {
-            var json = JsonSerializer.Serialize(todos);
+            var json = JsonSerializer.Serialize(todos.ToList());
             if (archivoDel is not null)
                 await drive.ActualizarContenidoAsync(archivoDel.Id, json);
             else
@@ -121,12 +129,15 @@ public class SyncService(DriveService drive, LocalDbService db)
             if (guid is not null && todos.Contains(guid))
                 await drive.EliminarArchivoAsync(archivo.Id);
         }
+
+        return aplicados;
     }
 
     // --- Descargar lo que hay en Drive y no tenemos en local ---
 
-    private async Task DescargarNuevosAsync(List<DriveFileInfo> archivosEnDrive)
+    private async Task<int> DescargarNuevosAsync(List<DriveFileInfo> archivosEnDrive)
     {
+        int count = 0;
         var movimientosLocales = await db.ObtenerMovimientosAsync();
         var recurrentesLocales = await db.ObtenerRecurrentesAsync();
         var eliminados = await db.ObtenerEliminadosAsync();
@@ -149,6 +160,7 @@ public class SyncService(DriveService drive, LocalDbService db)
                 if (mov is null) continue;
                 mov.Sincronizado = true;
                 await db.GuardarMovimientoAsync(mov);
+                count++;
             }
             else if (archivo.Nombre.StartsWith("rec-") && archivo.Nombre.EndsWith(".json"))
             {
@@ -161,7 +173,9 @@ public class SyncService(DriveService drive, LocalDbService db)
                 if (rec is null) continue;
                 rec.Sincronizado = true;
                 await db.GuardarRecurrenteAsync(rec);
+                count++;
             }
         }
+        return count;
     }
 }

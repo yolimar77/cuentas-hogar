@@ -23,6 +23,10 @@
                 {
                     <p class="text-danger small mb-2">⚠️ @Sync.UltimoError</p>
                 }
+                @if (Sync.UltimoDetalle is not null)
+                {
+                    <p class="text-muted small mb-2">@Sync.UltimoDetalle</p>
+                }
                 <div class="d-flex gap-2">
                     <button class="btn btn-outline-primary btn-sm" @onclick="Sincronizar" disabled="@Sync.SincronizandoAhora">
                         @(Sync.SincronizandoAhora ? "Sincronizando..." : "Sincronizar ahora")
