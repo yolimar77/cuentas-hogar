@@ -2,6 +2,7 @@
 @inject LocalDbService Db
 @inject PrevisionService Prevision
 @inject DriveService Drive
+@inject SyncService Sync
 @inject NavigationManager Nav
 
 <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
@@ -23,11 +24,15 @@
         if (firstRender)
         {
             await Drive.InicializarAsync();
+
             if (Drive.VieneDriveRedirect)
             {
                 Drive.VieneDriveRedirect = false;
                 Nav.NavigateTo("configuracion");
             }
+
+            if (Drive.Conectado)
+                await Sync.SincronizarAsync();
         }
     }
 }

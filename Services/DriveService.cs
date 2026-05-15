@@ -15,6 +15,8 @@ public class DriveService(IJSRuntime js, HttpClient http)
     private DotNetObjectReference<DriveService>? _ref;
     private TaskCompletionSource<string>? _authTcs;
 
+    private const string TokenKey = "ha_drive_token";
+
     public bool Conectado => _token != null;
     public bool VieneDriveRedirect { get; set; } = false;
     public event Action? OnEstadoCambiado;
@@ -36,21 +38,32 @@ public class DriveService(IJSRuntime js, HttpClient http)
             Console.WriteLine($"GIS init error: {ex.Message}");
         }
 
-        // Siempre comprobar si venimos de un redireccionamiento OAuth en móvil
+        // Comprobar si venimos de un redireccionamiento OAuth en móvil
         try
         {
-            var token = await js.InvokeAsync<string?>("gis.checkRedirectToken");
-            if (!string.IsNullOrEmpty(token))
+            var redirectToken = await js.InvokeAsync<string?>("gis.checkRedirectToken");
+            if (!string.IsNullOrEmpty(redirectToken))
             {
-                _token = token;
+                _token = redirectToken;
+                await GuardarTokenAsync(redirectToken);
                 VieneDriveRedirect = true;
                 OnEstadoCambiado?.Invoke();
+                return;
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"checkRedirectToken error: {ex.Message}");
         }
+
+        // Cargar token guardado de sesión anterior
+        try
+        {
+            var tokenGuardado = await js.InvokeAsync<string?>("storage.get", TokenKey);
+            if (!string.IsNullOrEmpty(tokenGuardado))
+                _token = tokenGuardado;
+        }
+        catch { }
     }
 
     // --- Conectar: popup en escritorio, redirección en móvil ---
@@ -73,11 +86,15 @@ public class DriveService(IJSRuntime js, HttpClient http)
     // --- Callbacks llamados desde JavaScript ---
 
     [JSInvokable]
-    public void OnAuthSuccess(string token)
+    public async void OnAuthSuccess(string token)
     {
         _token = token;
+        await GuardarTokenAsync(token);
         _authTcs?.TrySetResult(token);
     }
+
+    private async Task GuardarTokenAsync(string token) =>
+        await js.InvokeVoidAsync("storage.set", TokenKey, token);
 
     [JSInvokable]
     public void OnAuthError(string error)
@@ -92,7 +109,24 @@ public class DriveService(IJSRuntime js, HttpClient http)
         if (_token != null)
             await js.InvokeVoidAsync("gis.disconnect", _token);
         _token = null;
+        await js.InvokeVoidAsync("storage.remove", TokenKey);
         OnEstadoCambiado?.Invoke();
+    }
+
+    public async Task LimpiarTokenSiExpiradoAsync()
+    {
+        // Si la lista de archivos falla, el token expiró — limpiar para que el usuario reconecte
+        try
+        {
+            var archivos = await ListarArchivosAsync();
+            _ = archivos; // solo verificamos que funciona
+        }
+        catch
+        {
+            _token = null;
+            await js.InvokeVoidAsync("storage.remove", TokenKey);
+            OnEstadoCambiado?.Invoke();
+        }
     }
 
     // --- API de Drive ---
