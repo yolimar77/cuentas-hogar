@@ -183,6 +183,15 @@ public class DriveService(IJSRuntime js, HttpClient http)
     public async Task EliminarArchivoAsync(string fileId) =>
         await EnviarAsync(HttpMethod.Delete, $"{ApiBase}/files/{fileId}");
 
+    public async Task<bool> ActualizarContenidoAsync(string fileId, string contenidoJson)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"{UploadBase}/files/{fileId}?uploadType=media");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+        request.Content = new StringContent(contenidoJson, Encoding.UTF8, "application/json");
+        var response = await http.SendAsync(request);
+        return response.IsSuccessStatusCode;
+    }
+
     private Task<HttpResponseMessage> EnviarAsync(HttpMethod method, string url)
     {
         var request = new HttpRequestMessage(method, url);
