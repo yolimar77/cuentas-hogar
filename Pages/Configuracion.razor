@@ -17,8 +17,12 @@
             {
                 <p class="text-success small mb-1">✅ Conectado con Google Drive</p>
                 <p class="text-muted small mb-2">
-                    Última sincronización: @(Sync.UltimaSincronizacion?.ToString("dd/MM HH:mm") ?? "nunca")
+                    Última sync: @(Sync.UltimaSincronizacion?.ToString("dd/MM HH:mm") ?? "nunca")
                 </p>
+                @if (Sync.UltimoError is not null)
+                {
+                    <p class="text-danger small mb-2">⚠️ @Sync.UltimoError</p>
+                }
                 <div class="d-flex gap-2">
                     <button class="btn btn-outline-primary btn-sm" @onclick="Sincronizar" disabled="@Sync.SincronizandoAhora">
                         @(Sync.SincronizandoAhora ? "Sincronizando..." : "Sincronizar ahora")
@@ -128,12 +132,19 @@
     protected override async Task OnInitializedAsync()
     {
         Drive.OnEstadoCambiado += OnDriveEstadoCambiado;
+        Sync.OnSyncCompletado += OnSyncCompletado;
         await Cargar();
     }
 
     private void OnDriveEstadoCambiado() => InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Drive.OnEstadoCambiado -= OnDriveEstadoCambiado;
+    private Task OnSyncCompletado() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Drive.OnEstadoCambiado -= OnDriveEstadoCambiado;
+        Sync.OnSyncCompletado -= OnSyncCompletado;
+    }
 
     private async Task Cargar()
     {

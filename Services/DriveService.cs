@@ -135,7 +135,17 @@ public class DriveService(IJSRuntime js, HttpClient http)
     {
         var url = $"{ApiBase}/files?spaces=appDataFolder&fields=files(id,name)&pageSize=1000";
         var response = await EnviarAsync(HttpMethod.Get, url);
-        if (!response.IsSuccessStatusCode) return [];
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            _token = null;
+            try { await js.InvokeVoidAsync("storage.remove", TokenKey); } catch { }
+            OnEstadoCambiado?.Invoke();
+            throw new Exception("Token de Google expirado. Reconéctate en Ajustes.");
+        }
+
+        if (!response.IsSuccessStatusCode)
+            throw new Exception($"Error Drive ({(int)response.StatusCode})");
 
         var json = await response.Content.ReadAsStringAsync();
         var doc = JsonDocument.Parse(json);
