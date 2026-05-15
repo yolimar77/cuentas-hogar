@@ -15,7 +15,8 @@ public class PrevisionMensual
 
     public decimal Margen => IngresosTotales - GastosTotales;
 
-    public decimal PorcentajeGasto => IngresosTotales == 0 ? 100
+    public decimal PorcentajeGasto => IngresosTotales == 0
+        ? (GastosTotales == 0 ? 0 : 100)
         : Math.Round(GastosTotales / IngresosTotales * 100, 1);
 
     public NivelAlerta Nivel => PorcentajeGasto switch
