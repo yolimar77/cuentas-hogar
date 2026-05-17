@@ -6,6 +6,7 @@
 @inject PrevisionService Prevision
 @inject SyncService Sync
 @inject DriveService Drive
+@inject NavigationManager Nav
 @implements IDisposable
 
 <div class="container-sm py-3">
@@ -182,7 +183,18 @@
         Sync.OnSyncCompletado += OnSyncCompletado;
         Sync.OnEstadoCambiado += OnEstadoCambiado;
         Drive.OnEstadoCambiado += OnEstadoCambiado;
+        Nav.LocationChanged += OnLocationChanged;
         await Cargar();
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        var uri = new Uri(e.Location);
+        if (uri.AbsolutePath.TrimEnd('/') is "" or "/")
+        {
+            await Cargar();
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private async Task Cargar()
@@ -271,6 +283,7 @@
         Sync.OnSyncCompletado -= OnSyncCompletado;
         Sync.OnEstadoCambiado -= OnEstadoCambiado;
         Drive.OnEstadoCambiado -= OnEstadoCambiado;
+        Nav.LocationChanged -= OnLocationChanged;
     }
 
     private string NombreMes() =>
