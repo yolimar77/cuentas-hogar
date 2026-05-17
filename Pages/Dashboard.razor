@@ -208,6 +208,7 @@
 
     private async Task Cargar()
     {
+        await Prevision.GenerarMovimientosRecurrentesAsync(_mesVista, _anyoVista);
         _prevision = await Prevision.CalcularAsync(_mesVista, _anyoVista);
 
         var todos = await Db.ObtenerMovimientosAsync();

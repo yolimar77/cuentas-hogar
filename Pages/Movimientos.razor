@@ -2,6 +2,7 @@
 @using HomeAccounts.Models
 @using HomeAccounts.Services
 @inject LocalDbService Db
+@inject PrevisionService Prevision
 @inject SyncService Sync
 @implements IDisposable
 
@@ -136,6 +137,7 @@
 
     private async Task Cargar()
     {
+        await Prevision.GenerarMovimientosRecurrentesAsync(_mesFiltro.Month, _mesFiltro.Year);
         var todos = await Db.ObtenerMovimientosAsync();
         _movimientos = todos
             .Where(m => m.Fecha.Month == _mesFiltro.Month && m.Fecha.Year == _mesFiltro.Year)

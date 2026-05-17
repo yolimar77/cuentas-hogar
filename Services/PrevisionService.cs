@@ -33,12 +33,14 @@ public class PrevisionService(LocalDbService db)
         };
     }
 
-    public async Task GenerarMovimientosRecurrentesAsync()
+    public async Task GenerarMovimientosRecurrentesAsync(int? mesFin = null, int? anyoFin = null)
     {
         var recurrentes = await db.ObtenerRecurrentesAsync();
         var hoy = DateTime.Today;
-        // Generar el mes actual + el siguiente para que el usuario vea los próximos gastos
-        var finHorizonte = new DateTime(hoy.Year, hoy.Month, 1).AddMonths(2).AddDays(-1);
+        // Por defecto genera hasta 2 meses en el futuro; si se indica mes/año destino, llega hasta ahí
+        var finHorizonte = (mesFin.HasValue && anyoFin.HasValue)
+            ? new DateTime(anyoFin.Value, mesFin.Value, DateTime.DaysInMonth(anyoFin.Value, mesFin.Value))
+            : new DateTime(hoy.Year, hoy.Month, 1).AddMonths(2).AddDays(-1);
 
         foreach (var rec in recurrentes.Where(r => r.Activo))
         {
