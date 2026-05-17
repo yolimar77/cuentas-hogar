@@ -268,7 +268,7 @@
 
     private async Task MesSiguiente()
     {
-        if (EsMesActual()) return;
+        if (EsLimiteFuturo()) return;
         var fecha = new DateTime(_anyoVista, _mesVista, 1).AddMonths(1);
         _mesVista  = fecha.Month;
         _anyoVista = fecha.Year;
