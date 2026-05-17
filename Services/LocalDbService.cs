@@ -168,8 +168,9 @@ public class LocalDbService(IJSRuntime js)
         var cuentas = await ObtenerCuentasAsync();
         if (cuentas.Count == 0)
         {
-            await GuardarCuentaAsync(new Cuenta { Nombre = "Cuenta corriente" });
-            await GuardarCuentaAsync(new Cuenta { Nombre = "Efectivo" });
+            // IDs fijos para que todos los dispositivos generen los mismos IDs y no haya duplicados al sincronizar
+            await GuardarCuentaAsync(new Cuenta { Id = "def-corriente", Nombre = "Cuenta corriente" });
+            await GuardarCuentaAsync(new Cuenta { Id = "def-efectivo",  Nombre = "Efectivo" });
         }
 
         var categorias = await ObtenerCategoriasAsync();
@@ -177,15 +178,15 @@ public class LocalDbService(IJSRuntime js)
         {
             var defaults = new List<Categoria>
             {
-                new() { Nombre = "Nómina",        Tipo = TipoMovimiento.Ingreso, Icono = "💼" },
-                new() { Nombre = "Otros ingresos", Tipo = TipoMovimiento.Ingreso, Icono = "💰" },
-                new() { Nombre = "Alimentación",   Tipo = TipoMovimiento.Gasto,   Icono = "🛒" },
-                new() { Nombre = "Transporte",     Tipo = TipoMovimiento.Gasto,   Icono = "🚗" },
-                new() { Nombre = "Suministros",    Tipo = TipoMovimiento.Gasto,   Icono = "💡" },
-                new() { Nombre = "Ocio",           Tipo = TipoMovimiento.Gasto,   Icono = "🎬" },
-                new() { Nombre = "Salud",          Tipo = TipoMovimiento.Gasto,   Icono = "🏥" },
-                new() { Nombre = "Préstamos",      Tipo = TipoMovimiento.Gasto,   Icono = "🏦" },
-                new() { Nombre = "Otros gastos",   Tipo = TipoMovimiento.Gasto,   Icono = "📦" },
+                new() { Id = "def-nomina",     Nombre = "Nómina",         Tipo = TipoMovimiento.Ingreso, Icono = "💼" },
+                new() { Id = "def-otros-ing",  Nombre = "Otros ingresos", Tipo = TipoMovimiento.Ingreso, Icono = "💰" },
+                new() { Id = "def-aliment",    Nombre = "Alimentación",   Tipo = TipoMovimiento.Gasto,   Icono = "🛒" },
+                new() { Id = "def-transp",     Nombre = "Transporte",     Tipo = TipoMovimiento.Gasto,   Icono = "🚗" },
+                new() { Id = "def-sumin",      Nombre = "Suministros",    Tipo = TipoMovimiento.Gasto,   Icono = "💡" },
+                new() { Id = "def-ocio",       Nombre = "Ocio",           Tipo = TipoMovimiento.Gasto,   Icono = "🎬" },
+                new() { Id = "def-salud",      Nombre = "Salud",          Tipo = TipoMovimiento.Gasto,   Icono = "🏥" },
+                new() { Id = "def-prestamos",  Nombre = "Préstamos",      Tipo = TipoMovimiento.Gasto,   Icono = "🏦" },
+                new() { Id = "def-otros-gast", Nombre = "Otros gastos",   Tipo = TipoMovimiento.Gasto,   Icono = "📦" },
             };
             foreach (var cat in defaults)
                 await GuardarCategoriaAsync(cat);
