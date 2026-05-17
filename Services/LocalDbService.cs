@@ -96,6 +96,7 @@ public class LocalDbService(IJSRuntime js)
         var lista = await ObtenerCuentasAsync();
         lista.RemoveAll(c => c.Id == id);
         await GuardarLista(KeyCuentas, lista);
+        await MarcarEliminadoAsync(id);
     }
 
     // --- Categorías ---
@@ -117,6 +118,7 @@ public class LocalDbService(IJSRuntime js)
         var lista = await ObtenerCategoriasAsync();
         lista.RemoveAll(c => c.Id == id);
         await GuardarLista(KeyCategorias, lista);
+        await MarcarEliminadoAsync(id);
     }
 
     // --- Eliminados (tombstones para sync) ---

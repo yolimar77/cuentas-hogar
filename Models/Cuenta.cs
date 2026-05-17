@@ -6,4 +6,5 @@ public class Cuenta
     public string Nombre { get; set; } = "";
     public decimal SaldoInicial { get; set; } = 0;
     public bool Activa { get; set; } = true;
+    public DateTime ModificadoEn { get; set; } = DateTime.UtcNow;
 }

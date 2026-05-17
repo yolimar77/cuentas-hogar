@@ -203,7 +203,11 @@
     }
 
     private void OnDriveEstadoCambiado() => InvokeAsync(StateHasChanged);
-    private Task OnSyncCompletado() => InvokeAsync(StateHasChanged);
+    private async Task OnSyncCompletado()
+    {
+        await Cargar();
+        await InvokeAsync(StateHasChanged);
+    }
 
     public void Dispose()
     {
@@ -223,9 +227,11 @@
     private async Task GuardarCuenta()
     {
         if (string.IsNullOrWhiteSpace(_nuevaCuenta.Nombre)) return;
+        _nuevaCuenta.ModificadoEn = DateTime.UtcNow;
         await Db.GuardarCuentaAsync(_nuevaCuenta);
         await Cargar();
         _mostrarCuenta = false;
+        _ = Sync.SincronizarAsync();
     }
 
     private async Task GuardarCategoria()
@@ -238,9 +244,11 @@
         }
         try
         {
+            _nuevaCategoria.ModificadoEn = DateTime.UtcNow;
             await Db.GuardarCategoriaAsync(_nuevaCategoria);
             await Cargar();
             _mostrarCategoria = false;
+            _ = Sync.SincronizarAsync();
         }
         catch (Exception ex)
         {
@@ -248,8 +256,8 @@
         }
     }
 
-    private async Task EliminarCuenta(string id) { await Db.EliminarCuentaAsync(id); await Cargar(); }
-    private async Task EliminarCategoria(string id) { await Db.EliminarCategoriaAsync(id); await Cargar(); }
+    private async Task EliminarCuenta(string id) { await Db.EliminarCuentaAsync(id); await Cargar(); _ = Sync.SincronizarAsync(); }
+    private async Task EliminarCategoria(string id) { await Db.EliminarCategoriaAsync(id); await Cargar(); _ = Sync.SincronizarAsync(); }
 
     private async Task Conectar()
     {

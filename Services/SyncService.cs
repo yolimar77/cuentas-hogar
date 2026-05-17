@@ -8,6 +8,8 @@ public class SyncService(DriveService drive, LocalDbService db)
     private readonly JsonSerializerOptions _json = new() { PropertyNameCaseInsensitive = true };
     private const string NombreMovs = "movimientos.json";
     private const string NombreRecs = "recurrentes.json";
+    private const string NombreCats = "categorias.json";
+    private const string NombreCuents = "cuentas.json";
     private const string NombreDels = "deletions.json";
 
     public bool SincronizandoAhora { get; private set; } = false;
@@ -41,10 +43,17 @@ public class SyncService(DriveService drive, LocalDbService db)
             // 3. Merge recurrentes
             int cambiosRec = await MergeRecurrentesAsync(idx, eliminados);
 
-            UltimaSincronizacion = DateTime.Now;
-            UltimoDetalle = $"Sync OK · {cambiosMov + cambiosRec} cambios";
+            // 4. Merge categorías
+            int cambiosCat = await MergeCategoriasAsync(idx, eliminados);
 
-            if ((cambiosMov + cambiosRec) > 0 && OnSyncCompletado is not null)
+            // 5. Merge cuentas
+            int cambiosCuent = await MergeCuentasAsync(idx, eliminados);
+
+            int totalCambios = cambiosMov + cambiosRec + cambiosCat + cambiosCuent;
+            UltimaSincronizacion = DateTime.Now;
+            UltimoDetalle = $"Sync OK · {totalCambios} cambios";
+
+            if (totalCambios > 0 && OnSyncCompletado is not null)
                 await OnSyncCompletado.Invoke();
         }
         catch (Exception ex)
@@ -164,6 +173,90 @@ public class SyncService(DriveService drive, LocalDbService db)
         return cambios;
     }
 
+    // --- Categorías ---
+
+    private async Task<int> MergeCategoriasAsync(Dictionary<string, DriveFileInfo> idx, HashSet<string> eliminados)
+    {
+        var local = await db.ObtenerCategoriasAsync();
+
+        List<Categoria> deDrive = [];
+        if (idx.TryGetValue(NombreCats, out var arc))
+        {
+            var contenido = await drive.DescargarArchivoAsync(arc.Id);
+            if (contenido is not null)
+                deDrive = JsonSerializer.Deserialize<List<Categoria>>(contenido, _json) ?? [];
+        }
+
+        var merged = local.ToDictionary(c => c.Id);
+        foreach (var cat in deDrive)
+        {
+            if (eliminados.Contains(cat.Id)) continue;
+            if (!merged.TryGetValue(cat.Id, out var localCat) || cat.ModificadoEn > localCat.ModificadoEn)
+                merged[cat.Id] = cat;
+        }
+        foreach (var id in eliminados) merged.Remove(id);
+
+        var lista = merged.Values.ToList();
+        var json = JsonSerializer.Serialize(lista);
+        if (idx.TryGetValue(NombreCats, out var archivoExistente))
+            await drive.ActualizarContenidoAsync(archivoExistente.Id, json);
+        else
+            await drive.SubirArchivoAsync(NombreCats, json);
+
+        var localById = local.ToDictionary(c => c.Id);
+        bool hayCambios = lista.Count != local.Count
+            || lista.Any(c => !localById.ContainsKey(c.Id))
+            || local.Any(c => !merged.ContainsKey(c.Id))
+            || lista.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn);
+
+        foreach (var cat in lista)
+            await db.GuardarCategoriaAsync(cat);
+
+        return hayCambios ? 1 : 0;
+    }
+
+    // --- Cuentas ---
+
+    private async Task<int> MergeCuentasAsync(Dictionary<string, DriveFileInfo> idx, HashSet<string> eliminados)
+    {
+        var local = await db.ObtenerCuentasAsync();
+
+        List<Cuenta> deDrive = [];
+        if (idx.TryGetValue(NombreCuents, out var arc))
+        {
+            var contenido = await drive.DescargarArchivoAsync(arc.Id);
+            if (contenido is not null)
+                deDrive = JsonSerializer.Deserialize<List<Cuenta>>(contenido, _json) ?? [];
+        }
+
+        var merged = local.ToDictionary(c => c.Id);
+        foreach (var cuenta in deDrive)
+        {
+            if (eliminados.Contains(cuenta.Id)) continue;
+            if (!merged.TryGetValue(cuenta.Id, out var localCuenta) || cuenta.ModificadoEn > localCuenta.ModificadoEn)
+                merged[cuenta.Id] = cuenta;
+        }
+        foreach (var id in eliminados) merged.Remove(id);
+
+        var lista = merged.Values.ToList();
+        var json = JsonSerializer.Serialize(lista);
+        if (idx.TryGetValue(NombreCuents, out var archivoExistente))
+            await drive.ActualizarContenidoAsync(archivoExistente.Id, json);
+        else
+            await drive.SubirArchivoAsync(NombreCuents, json);
+
+        var localById = local.ToDictionary(c => c.Id);
+        bool hayCambios = lista.Count != local.Count
+            || lista.Any(c => !localById.ContainsKey(c.Id))
+            || local.Any(c => !merged.ContainsKey(c.Id))
+            || lista.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn);
+
+        foreach (var cuenta in lista)
+            await db.GuardarCuentaAsync(cuenta);
+
+        return hayCambios ? 1 : 0;
+    }
+
     // --- Eliminaciones ---
 
     private async Task<HashSet<string>> SincronizarEliminacionesAsync(Dictionary<string, DriveFileInfo> idx)
@@ -188,6 +281,8 @@ public class SyncService(DriveService drive, LocalDbService db)
             {
                 await db.EliminarMovimientoAsync(id);
                 await db.EliminarRecurrenteAsync(id);
+                await db.EliminarCategoriaAsync(id);
+                await db.EliminarCuentaAsync(id);
             }
         }
 
