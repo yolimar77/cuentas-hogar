@@ -57,6 +57,10 @@
     @if (_ingresos.Count == 0 && _gastos.Count == 0)
     {
         <p class="text-muted small">Aún no hay pagos recurrentes configurados.</p>
+        @if (_errorCarga is not null)
+        {
+            <p class="text-danger small">@_errorCarga</p>
+        }
     }
 
 </div>
@@ -82,7 +86,7 @@
                     </div>
                     <div class="mb-2">
                         <label class="form-label small">Concepto</label>
-                        <input class="form-control" @bind="_nuevo.Concepto" placeholder="Nómina, Letra coche..." />
+                        <input class="form-control" @bind="_nuevo.Concepto" @bind:event="oninput" placeholder="Nómina, Letra coche..." />
                     </div>
                     <div class="mb-2">
                         <label class="form-label small">Importe mensual (€)</label>
@@ -120,6 +124,10 @@
                         </select>
                     </div>
                 </div>
+                @if (_errorGuardar is not null)
+                {
+                    <div class="px-3 pb-2"><p class="text-danger small mb-0">@_errorGuardar</p></div>
+                }
                 <div class="modal-footer">
                     <button class="btn btn-secondary btn-sm" @onclick="Cerrar">Cancelar</button>
                     <button class="btn btn-primary btn-sm" @onclick="Guardar">Guardar</button>
@@ -137,8 +145,14 @@
     private bool _mostrarFormulario = false;
     private bool _esEdicion = false;
     private MovimientoRecurrente _nuevo = new();
+    private string? _errorCarga;
+    private string? _errorGuardar;
 
-    protected override async Task OnInitializedAsync() => await Cargar();
+    protected override async Task OnInitializedAsync()
+    {
+        try { await Cargar(); }
+        catch (Exception ex) { _errorCarga = $"Error al cargar datos: {ex.Message}"; }
+    }
 
     private async Task Cargar()
     {
@@ -187,12 +201,29 @@
 
     private async Task Guardar()
     {
-        if (string.IsNullOrWhiteSpace(_nuevo.Concepto) || _nuevo.Importe <= 0) return;
-        await Db.GuardarRecurrenteAsync(_nuevo);
-        await Prevision.GenerarMovimientosRecurrentesAsync();
-        await Cargar();
-        _mostrarFormulario = false;
-        _ = Sync.SincronizarAsync();
+        _errorGuardar = null;
+        if (string.IsNullOrWhiteSpace(_nuevo.Concepto))
+        {
+            _errorGuardar = "El concepto es obligatorio.";
+            return;
+        }
+        if (_nuevo.Importe <= 0)
+        {
+            _errorGuardar = "El importe debe ser mayor que 0.";
+            return;
+        }
+        try
+        {
+            await Db.GuardarRecurrenteAsync(_nuevo);
+            await Prevision.GenerarMovimientosRecurrentesAsync();
+            await Cargar();
+            _mostrarFormulario = false;
+            _ = Sync.SincronizarAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorGuardar = $"Error al guardar: {ex.Message}";
+        }
     }
 
     private async Task Eliminar(string id)
@@ -202,5 +233,5 @@
         _ = Sync.SincronizarAsync();
     }
 
-    private void Cerrar() { _mostrarFormulario = false; _esEdicion = false; }
+    private void Cerrar() { _mostrarFormulario = false; _esEdicion = false; _errorGuardar = null; }
 }
