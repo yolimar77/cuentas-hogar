@@ -48,10 +48,27 @@ window.gis = {
                 scope: 'https://www.googleapis.com/auth/drive'
             });
             window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
-        } else if (window.gis._popupClient) {
-            window.gis._popupClient.requestAccessToken();
         } else {
-            console.error('Cliente OAuth no disponible');
+            // Inicialización perezosa: la librería GIS puede no estar lista cuando init() se llamó
+            if (!window.gis._popupClient && typeof google !== 'undefined' && google.accounts) {
+                window.gis._popupClient = google.accounts.oauth2.initTokenClient({
+                    client_id: window.gis._clientId,
+                    scope: 'https://www.googleapis.com/auth/drive',
+                    callback: (response) => {
+                        if (response.error) {
+                            window.gis._dotNetRef.invokeMethodAsync('OnAuthError', response.error);
+                        } else {
+                            window.gis._dotNetRef.invokeMethodAsync('OnAuthSuccess', response.access_token);
+                        }
+                    }
+                });
+            }
+
+            if (window.gis._popupClient) {
+                window.gis._popupClient.requestAccessToken();
+            } else {
+                console.error('Cliente OAuth no disponible');
+            }
         }
     },
 
