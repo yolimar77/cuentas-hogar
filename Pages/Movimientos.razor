@@ -14,11 +14,24 @@
     </div>
 
     <!-- Filtro de mes -->
-    <div class="d-flex gap-2 mb-3 align-items-center">
+    <div class="d-flex gap-2 mb-1 align-items-center">
         <button class="btn btn-outline-secondary btn-sm" @onclick="MesAnterior"><i class="ph-bold ph-caret-left"></i></button>
         <span class="flex-grow-1 text-center fw-bold">@MesTexto()</span>
         <button class="btn btn-outline-secondary btn-sm" @onclick="MesSiguiente"><i class="ph-bold ph-caret-right"></i></button>
     </div>
+    @if (_prevision is not null && _prevision.SaldoAcumulado != 0)
+    {
+        <div class="text-center mb-3" style="font-size:0.8rem">
+            <span class="text-muted">Saldo acumulado anterior: </span>
+            <span class="fw-bold @(_prevision.SaldoAcumulado >= 0 ? "text-success" : "text-danger")">
+                @(_prevision.SaldoAcumulado >= 0 ? "+" : "")@_prevision.SaldoAcumulado.ToString("C")
+            </span>
+        </div>
+    }
+    else
+    {
+        <div class="mb-3"></div>
+    }
 
     @if (_movimientos.Count == 0)
     {
@@ -114,8 +127,9 @@
 
 @code {
     private List<Movimiento> _movimientos = [];
-    private List<Categoria> _categorias = [];
-    private List<Cuenta> _cuentas = [];
+    private List<Categoria>  _categorias  = [];
+    private List<Cuenta>     _cuentas     = [];
+    private PrevisionMensual? _prevision;
     private bool _mostrarFormulario = false;
     private bool _esEdicion = false;
     private Movimiento _nuevo = new();
@@ -138,6 +152,7 @@
     private async Task Cargar()
     {
         await Prevision.GenerarMovimientosRecurrentesAsync(_mesFiltro.Month, _mesFiltro.Year);
+        _prevision = await Prevision.CalcularAsync(_mesFiltro.Month, _mesFiltro.Year);
         var todos = await Db.ObtenerMovimientosAsync();
         _movimientos = todos
             .Where(m => m.Fecha.Month == _mesFiltro.Month && m.Fecha.Year == _mesFiltro.Year)

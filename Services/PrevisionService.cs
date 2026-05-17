@@ -9,14 +9,14 @@ public class PrevisionService(LocalDbService db)
         var movimientos = await db.ObtenerMovimientosAsync();
         var recurrentes = await db.ObtenerRecurrentesAsync();
 
-        var movMes = movimientos.Where(m =>
-            m.Fecha.Month == mes && m.Fecha.Year == anyo);
-
+        var inicioMes     = new DateTime(anyo, mes, 1);
+        var movMes        = movimientos.Where(m => m.Fecha.Month == mes && m.Fecha.Year == anyo);
+        var movAnteriores = movimientos.Where(m => m.Fecha < inicioMes);
         var recActivosMes = recurrentes.Where(r => r.EstaActivoEnMes(mes, anyo));
 
         return new PrevisionMensual
         {
-            Mes = mes,
+            Mes  = mes,
             Anyo = anyo,
             IngresosRecurrentes = recActivosMes
                 .Where(r => r.Tipo == TipoMovimiento.Ingreso)
@@ -30,6 +30,9 @@ public class PrevisionService(LocalDbService db)
             GastosReales = movMes
                 .Where(m => m.Tipo == TipoMovimiento.Gasto)
                 .Sum(m => m.Importe),
+            SaldoAcumulado =
+                movAnteriores.Where(m => m.Tipo == TipoMovimiento.Ingreso).Sum(m => m.Importe) -
+                movAnteriores.Where(m => m.Tipo == TipoMovimiento.Gasto).Sum(m => m.Importe),
         };
     }
 

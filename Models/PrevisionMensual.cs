@@ -17,6 +17,9 @@ public class PrevisionMensual
     public decimal IngresosTotales => IngresosRecurrentes;
     public decimal GastosTotales => GastosRecurrentes;
 
+    // Suma de márgenes reales de todos los meses anteriores al visualizado
+    public decimal SaldoAcumulado { get; set; }
+
     // Balance y alerta basados en lo real
     public decimal Margen => IngresosReales - GastosReales;
 

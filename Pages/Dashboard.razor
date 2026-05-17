@@ -94,6 +94,19 @@
                 </div>
             </div>
         </div>
+        @if (_prevision is not null && _prevision.SaldoAcumulado != 0)
+        {
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                        <div class="small text-muted">Saldo acumulado meses anteriores</div>
+                        <div class="fw-bold @(_prevision.SaldoAcumulado >= 0 ? "text-success" : "text-danger")">
+                            @(_prevision.SaldoAcumulado >= 0 ? "+" : "")@_prevision.SaldoAcumulado.ToString("C")
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
     </div>
 
     <!-- Gráfico + categorías: columnas en PC, apilado en móvil -->
