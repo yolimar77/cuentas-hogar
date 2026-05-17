@@ -42,7 +42,7 @@
             <i class="ph-bold ph-caret-left"></i>
         </button>
         <h5 class="mb-0 text-capitalize">@NombreMes()</h5>
-        <button class="btn btn-outline-secondary btn-sm" @onclick="MesSiguiente" disabled="@EsLimiteFuturo()">
+        <button class="btn btn-outline-secondary btn-sm" @onclick="MesSiguiente">
             <i class="ph-bold ph-caret-right"></i>
         </button>
     </div>
@@ -268,7 +268,6 @@
 
     private async Task MesSiguiente()
     {
-        if (EsLimiteFuturo()) return;
         var fecha = new DateTime(_anyoVista, _mesVista, 1).AddMonths(1);
         _mesVista  = fecha.Month;
         _anyoVista = fecha.Year;
@@ -279,13 +278,6 @@
     {
         var hoy = DateTime.Today;
         return _mesVista == hoy.Month && _anyoVista == hoy.Year;
-    }
-
-    // Limitar navegación a 2 meses en el futuro (horizonte de generación de recurrentes)
-    private bool EsLimiteFuturo()
-    {
-        var limite = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(2);
-        return new DateTime(_anyoVista, _mesVista, 1) >= limite;
     }
 
     private async Task OnSyncCompletado()
