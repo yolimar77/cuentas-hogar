@@ -4,6 +4,7 @@
 @inject LocalDbService Db
 @inject PrevisionService Prevision
 @inject SyncService Sync
+@implements IDisposable
 
 <div class="container-sm py-3">
 
@@ -150,9 +151,18 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Sync.OnSyncCompletado += OnSyncCompletado;
         try { await Cargar(); }
         catch (Exception ex) { _errorCarga = $"Error al cargar datos: {ex.Message}"; }
     }
+
+    private async Task OnSyncCompletado()
+    {
+        await Cargar();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Sync.OnSyncCompletado -= OnSyncCompletado;
 
     private async Task Cargar()
     {

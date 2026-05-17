@@ -273,9 +273,9 @@ public class DriveService(IJSRuntime js, HttpClient http)
             .ToList();
     }
 
-    public async Task<bool> SubirArchivoAsync(string nombre, string contenidoJson)
+    public async Task SubirArchivoAsync(string nombre, string contenidoJson)
     {
-        if (_folderId == null) return false;
+        if (_folderId == null) throw new Exception("Sin carpeta de Drive configurada.");
 
         const string boundary = "ha_boundary_xyz";
         var metadata = JsonSerializer.Serialize(new { name = nombre, parents = new[] { _folderId } });
@@ -289,16 +289,9 @@ public class DriveService(IJSRuntime js, HttpClient http)
         body.Append(contenidoJson);
         body.Append($"\r\n--{boundary}--");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"{UploadBase}/files?uploadType=multipart");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
-        request.Content = new StringContent(body.ToString(), Encoding.UTF8);
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("multipart/related")
-        {
-            Parameters = { new NameValueHeaderValue("boundary", boundary) }
-        };
-
-        var response = await http.SendAsync(request);
-        return response.IsSuccessStatusCode;
+        var response = await EnviarUploadAsync(HttpMethod.Post, $"{UploadBase}/files?uploadType=multipart", body.ToString(), boundary);
+        if (!response.IsSuccessStatusCode)
+            throw new Exception($"Error al subir '{nombre}' ({(int)response.StatusCode})");
     }
 
     public async Task<string?> DescargarArchivoAsync(string fileId)
@@ -311,13 +304,56 @@ public class DriveService(IJSRuntime js, HttpClient http)
     public async Task EliminarArchivoAsync(string fileId) =>
         await EnviarAsync(HttpMethod.Delete, $"{ApiBase}/files/{fileId}");
 
-    public async Task<bool> ActualizarContenidoAsync(string fileId, string contenidoJson)
+    public async Task ActualizarContenidoAsync(string fileId, string contenidoJson)
     {
-        var request = new HttpRequestMessage(HttpMethod.Patch, $"{UploadBase}/files/{fileId}?uploadType=media");
+        var url = $"{UploadBase}/files/{fileId}?uploadType=media";
+        var request = new HttpRequestMessage(HttpMethod.Patch, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
         request.Content = new StringContent(contenidoJson, Encoding.UTF8, "application/json");
         var response = await http.SendAsync(request);
-        return response.IsSuccessStatusCode;
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await IntentarRefreshSilenciosoAsync())
+            {
+                var retry = new HttpRequestMessage(HttpMethod.Patch, url);
+                retry.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+                retry.Content = new StringContent(contenidoJson, Encoding.UTF8, "application/json");
+                response = await http.SendAsync(retry);
+            }
+        }
+
+        if (!response.IsSuccessStatusCode)
+            throw new Exception($"Error al actualizar archivo Drive ({(int)response.StatusCode})");
+    }
+
+    private async Task<HttpResponseMessage> EnviarUploadAsync(HttpMethod method, string url, string body, string boundary)
+    {
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+        request.Content = new StringContent(body, Encoding.UTF8);
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue("multipart/related")
+        {
+            Parameters = { new NameValueHeaderValue("boundary", boundary) }
+        };
+        var response = await http.SendAsync(request);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await IntentarRefreshSilenciosoAsync())
+            {
+                var retry = new HttpRequestMessage(method, url);
+                retry.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+                retry.Content = new StringContent(body, Encoding.UTF8);
+                retry.Content.Headers.ContentType = new MediaTypeHeaderValue("multipart/related")
+                {
+                    Parameters = { new NameValueHeaderValue("boundary", boundary) }
+                };
+                response = await http.SendAsync(retry);
+            }
+        }
+
+        return response;
     }
 
     private Task<HttpResponseMessage> EnviarAsync(HttpMethod method, string url)
