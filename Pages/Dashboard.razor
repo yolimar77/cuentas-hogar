@@ -11,7 +11,7 @@
 
 <div class="container-sm py-3">
 
-    <!-- Estado de sincronización -->
+    <!-- Estado de sincronización + versión -->
     <div class="d-flex align-items-center gap-2 mb-3" style="font-size:0.82rem;min-height:22px">
         @if (Sync.SincronizandoAhora)
         {
@@ -33,6 +33,7 @@
             <i class="ph-bold ph-cloud-check" style="color:#198754;font-size:1rem"></i>
             <span class="text-muted">Sincronizado · @Sync.UltimaSincronizacion.Value.ToString("HH:mm")</span>
         }
+        <span class="ms-auto text-muted" style="font-size:0.72rem;opacity:0.6">@_version</span>
     </div>
 
     <!-- Navegación de mes -->
@@ -164,6 +165,13 @@
 </div>
 
 @code {
+    private static readonly string _version =
+        ((System.Reflection.AssemblyInformationalVersionAttribute?)
+            System.Attribute.GetCustomAttribute(
+                System.Reflection.Assembly.GetExecutingAssembly(),
+                typeof(System.Reflection.AssemblyInformationalVersionAttribute)))
+        ?.InformationalVersion ?? "dev";
+
     private PrevisionMensual? _prevision;
     private int _mesVista;
     private int _anyoVista;

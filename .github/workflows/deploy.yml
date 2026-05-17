@@ -26,7 +26,9 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Compilar y publicar
-        run: dotnet publish HomeAccounts.csproj -c Release -o publish
+        run: |
+          BUILD_VER=$(date -u +"%d/%m %H:%M")
+          dotnet publish HomeAccounts.csproj -c Release -o publish /p:InformationalVersion="$BUILD_VER"
 
       - name: Copiar .nojekyll
         run: cp wwwroot/.nojekyll publish/wwwroot/.nojekyll
