@@ -159,18 +159,15 @@ public class SyncService(DriveService drive, LocalDbService db)
         else
             await drive.SubirArchivoAsync(NombreRecs, json);
 
-        int cambios = 0;
-        var localDict = local.ToDictionary(r => r.Id);
-        foreach (var rec in lista)
-        {
-            if (!localDict.TryGetValue(rec.Id, out var localRec) || rec.ModificadoEn > localRec.ModificadoEn)
-            {
-                rec.Sincronizado = true;
-                await db.GuardarRecurrenteAsync(rec);
-                cambios++;
-            }
-        }
-        return cambios;
+        var localById = local.ToDictionary(r => r.Id);
+        bool hayCambios = lista.Count != local.Count
+            || lista.Any(r => !localById.ContainsKey(r.Id))
+            || local.Any(r => !merged.ContainsKey(r.Id))
+            || lista.Any(r => localById.TryGetValue(r.Id, out var l) && l.ModificadoEn != r.ModificadoEn);
+
+        foreach (var rec in lista) rec.Sincronizado = true;
+        await db.ReemplazarRecurrentesAsync(lista);
+        return hayCambios ? 1 : 0;
     }
 
     // --- Categorías ---
@@ -178,6 +175,7 @@ public class SyncService(DriveService drive, LocalDbService db)
     private async Task<int> MergeCategoriasAsync(Dictionary<string, DriveFileInfo> idx, HashSet<string> eliminados)
     {
         var local = await db.ObtenerCategoriasAsync();
+        var localById = local.ToDictionary(c => c.Id);
 
         List<Categoria> deDrive = [];
         if (idx.TryGetValue(NombreCats, out var arc))
@@ -187,7 +185,7 @@ public class SyncService(DriveService drive, LocalDbService db)
                 deDrive = JsonSerializer.Deserialize<List<Categoria>>(contenido, _json) ?? [];
         }
 
-        var merged = local.ToDictionary(c => c.Id);
+        var merged = new Dictionary<string, Categoria>(localById);
         foreach (var cat in deDrive)
         {
             if (eliminados.Contains(cat.Id)) continue;
@@ -203,15 +201,12 @@ public class SyncService(DriveService drive, LocalDbService db)
         else
             await drive.SubirArchivoAsync(NombreCats, json);
 
-        var localById = local.ToDictionary(c => c.Id);
         bool hayCambios = lista.Count != local.Count
             || lista.Any(c => !localById.ContainsKey(c.Id))
             || local.Any(c => !merged.ContainsKey(c.Id))
             || lista.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn);
 
-        foreach (var cat in lista)
-            await db.GuardarCategoriaAsync(cat);
-
+        await db.ReemplazarCategoriasAsync(lista);
         return hayCambios ? 1 : 0;
     }
 
@@ -220,6 +215,7 @@ public class SyncService(DriveService drive, LocalDbService db)
     private async Task<int> MergeCuentasAsync(Dictionary<string, DriveFileInfo> idx, HashSet<string> eliminados)
     {
         var local = await db.ObtenerCuentasAsync();
+        var localById = local.ToDictionary(c => c.Id);
 
         List<Cuenta> deDrive = [];
         if (idx.TryGetValue(NombreCuents, out var arc))
@@ -229,7 +225,7 @@ public class SyncService(DriveService drive, LocalDbService db)
                 deDrive = JsonSerializer.Deserialize<List<Cuenta>>(contenido, _json) ?? [];
         }
 
-        var merged = local.ToDictionary(c => c.Id);
+        var merged = new Dictionary<string, Cuenta>(localById);
         foreach (var cuenta in deDrive)
         {
             if (eliminados.Contains(cuenta.Id)) continue;
@@ -245,15 +241,12 @@ public class SyncService(DriveService drive, LocalDbService db)
         else
             await drive.SubirArchivoAsync(NombreCuents, json);
 
-        var localById = local.ToDictionary(c => c.Id);
         bool hayCambios = lista.Count != local.Count
             || lista.Any(c => !localById.ContainsKey(c.Id))
             || local.Any(c => !merged.ContainsKey(c.Id))
             || lista.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn);
 
-        foreach (var cuenta in lista)
-            await db.GuardarCuentaAsync(cuenta);
-
+        await db.ReemplazarCuentasAsync(lista);
         return hayCambios ? 1 : 0;
     }
 
@@ -274,19 +267,32 @@ public class SyncService(DriveService drive, LocalDbService db)
             }
         }
 
-        // Aplicar eliminaciones remotas en local
-        foreach (var id in deDrive)
+        // Aplicar eliminaciones remotas en local: solo las que no teníamos ya
+        var nuevasEliminaciones = deDrive.Except(locales).ToList();
+        if (nuevasEliminaciones.Count > 0)
         {
-            if (!locales.Contains(id))
-            {
-                await db.EliminarMovimientoAsync(id);
-                await db.EliminarRecurrenteAsync(id);
-                await db.EliminarCategoriaAsync(id);
-                await db.EliminarCuentaAsync(id);
-            }
+            // Leer cada colección una sola vez y filtrar en memoria
+            var movimientos = await db.ObtenerMovimientosAsync();
+            var recurrentes = await db.ObtenerRecurrentesAsync();
+            var categorias = await db.ObtenerCategoriasAsync();
+            var cuentas = await db.ObtenerCuentasAsync();
+
+            var idsMovs = nuevasEliminaciones.ToHashSet();
+            movimientos.RemoveAll(m => idsMovs.Contains(m.Id));
+            recurrentes.RemoveAll(r => idsMovs.Contains(r.Id));
+            categorias.RemoveAll(c => idsMovs.Contains(c.Id));
+            cuentas.RemoveAll(c => idsMovs.Contains(c.Id));
+
+            await db.ReemplazarMovimientosAsync(movimientos);
+            await db.ReemplazarRecurrentesAsync(recurrentes);
+            await db.ReemplazarCategoriasAsync(categorias);
+            await db.ReemplazarCuentasAsync(cuentas);
+
+            foreach (var id in nuevasEliminaciones)
+                await db.MarcarEliminadoAsync(id);
         }
 
-        // Fusionar y subir
+        // Fusionar y subir tombstones
         var todos = locales.Union(deDrive).ToHashSet();
         if (todos.Count > 0)
         {
