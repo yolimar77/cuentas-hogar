@@ -27,7 +27,7 @@ jobs:
 
       - name: Compilar y publicar
         run: |
-          BUILD_VER=$(date -u +"%d/%m %H:%M")
+          BUILD_VER="v.$(date -u +"%d%m.%H.%M")"
           dotnet publish HomeAccounts.csproj -c Release -o publish /p:InformationalVersion="$BUILD_VER"
 
       - name: Copiar .nojekyll

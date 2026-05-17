@@ -166,11 +166,12 @@
 
 @code {
     private static readonly string _version =
-        ((System.Reflection.AssemblyInformationalVersionAttribute?)
+        (((System.Reflection.AssemblyInformationalVersionAttribute?)
             System.Attribute.GetCustomAttribute(
                 System.Reflection.Assembly.GetExecutingAssembly(),
                 typeof(System.Reflection.AssemblyInformationalVersionAttribute)))
-        ?.InformationalVersion ?? "dev";
+        ?.InformationalVersion ?? "dev")
+        .Split('+')[0]; // .NET añade +githash automáticamente, lo eliminamos
 
     private PrevisionMensual? _prevision;
     private int _mesVista;
