@@ -37,11 +37,13 @@ public class PrevisionService(LocalDbService db)
     {
         var recurrentes = await db.ObtenerRecurrentesAsync();
         var hoy = DateTime.Today;
+        // Generar el mes actual + el siguiente para que el usuario vea los próximos gastos
+        var finHorizonte = new DateTime(hoy.Year, hoy.Month, 1).AddMonths(2).AddDays(-1);
 
         foreach (var rec in recurrentes.Where(r => r.Activo))
         {
             var fecha = new DateTime(rec.FechaInicio.Year, rec.FechaInicio.Month, 1);
-            var limite = new DateTime(Math.Min(hoy.Ticks, rec.FechaFin.Ticks));
+            var limite = new DateTime(Math.Min(finHorizonte.Ticks, rec.FechaFin.Ticks));
 
             while (fecha <= limite)
             {

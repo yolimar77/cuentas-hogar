@@ -109,10 +109,11 @@ public class SyncService(DriveService drive, LocalDbService db)
 
         // Reemplazar local completo con el resultado del merge (elimina duplicados de recurrentes)
         var listaIds = lista.Select(m => m.Id).ToHashSet();
-        var localIds = local.Select(m => m.Id).ToHashSet();
+        var localById = local.ToDictionary(m => m.Id);
         bool hayCambios = lista.Count != local.Count
-            || lista.Any(m => !localIds.Contains(m.Id))
-            || local.Any(m => !listaIds.Contains(m.Id));
+            || lista.Any(m => !localById.ContainsKey(m.Id))
+            || local.Any(m => !listaIds.Contains(m.Id))
+            || lista.Any(m => localById.TryGetValue(m.Id, out var l) && l.ModificadoEn != m.ModificadoEn);
         foreach (var mov in lista) mov.Sincronizado = true;
         await db.ReemplazarMovimientosAsync(lista);
         return hayCambios ? 1 : 0;
