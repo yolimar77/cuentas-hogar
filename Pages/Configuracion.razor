@@ -163,8 +163,12 @@
                                     @onclick="() => _nuevaCategoria.Tipo = TipoMovimiento.Ingreso">Ingreso</button>
                         </div>
                     </div>
-                    <input class="form-control mb-2" @bind="_nuevaCategoria.Nombre" placeholder="Nombre" />
+                    <input class="form-control mb-2" @bind="_nuevaCategoria.Nombre" @bind:event="oninput" placeholder="Nombre" />
                     <input class="form-control" @bind="_nuevaCategoria.Icono" placeholder="Emoji (ej: 🛒)" />
+                    @if (_errorCategoria is not null)
+                    {
+                        <p class="text-danger small mt-2 mb-0">@_errorCategoria</p>
+                    }
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary btn-sm" @onclick="() => _mostrarCategoria = false">Cancelar</button>
@@ -182,6 +186,7 @@
     private bool _mostrarCategoria = false;
     private Cuenta _nuevaCuenta = new();
     private Categoria _nuevaCategoria = new();
+    private string? _errorCategoria;
     private string _emailCompartir = "";
     private string _codigoExterno = "";
     private bool _compartiendoAhora = false;
@@ -213,7 +218,7 @@
     }
 
     private void AbrirNuevaCuenta() { _nuevaCuenta = new Cuenta(); _mostrarCuenta = true; }
-    private void AbrirNuevaCategoria() { _nuevaCategoria = new Categoria(); _mostrarCategoria = true; }
+    private void AbrirNuevaCategoria() { _nuevaCategoria = new Categoria(); _errorCategoria = null; _mostrarCategoria = true; }
 
     private async Task GuardarCuenta()
     {
@@ -225,10 +230,22 @@
 
     private async Task GuardarCategoria()
     {
-        if (string.IsNullOrWhiteSpace(_nuevaCategoria.Nombre)) return;
-        await Db.GuardarCategoriaAsync(_nuevaCategoria);
-        await Cargar();
-        _mostrarCategoria = false;
+        _errorCategoria = null;
+        if (string.IsNullOrWhiteSpace(_nuevaCategoria.Nombre))
+        {
+            _errorCategoria = "El nombre es obligatorio.";
+            return;
+        }
+        try
+        {
+            await Db.GuardarCategoriaAsync(_nuevaCategoria);
+            await Cargar();
+            _mostrarCategoria = false;
+        }
+        catch (Exception ex)
+        {
+            _errorCategoria = $"Error al guardar: {ex.Message}";
+        }
     }
 
     private async Task EliminarCuenta(string id) { await Db.EliminarCuentaAsync(id); await Cargar(); }
