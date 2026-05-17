@@ -1,6 +1,7 @@
 @page "/"
 @using HomeAccounts.Models
 @using HomeAccounts.Services
+@using System.Globalization
 @inject LocalDbService Db
 @inject PrevisionService Prevision
 @inject SyncService Sync
@@ -33,20 +34,31 @@
         }
     </div>
 
+    <!-- Navegación de mes -->
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <button class="btn btn-outline-secondary btn-sm" @onclick="MesAnterior">
+            <i class="ph-bold ph-caret-left"></i>
+        </button>
+        <h5 class="mb-0 text-capitalize">@NombreMes()</h5>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="MesSiguiente" disabled="@EsMesActual()">
+            <i class="ph-bold ph-caret-right"></i>
+        </button>
+    </div>
+
+    <!-- Alerta de previsión -->
     @if (_prevision is not null)
     {
         <div class="alert @AlertClass() mb-3" role="alert">
             <strong>@AlertIcono() @AlertMensaje()</strong>
             <div class="fs-4 fw-bold mt-1">@_prevision.Margen.ToString("C")</div>
             <div class="progress mt-2" style="height:6px">
-                <div class="progress-bar @BarraClass()" style="width:@(Math.Min(_prevision.PorcentajeGasto,100).ToString("F1", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+                <div class="progress-bar @BarraClass()" style="width:@(Math.Min(_prevision.PorcentajeGasto,100).ToString("F1", CultureInfo.InvariantCulture))%"></div>
             </div>
             <small class="text-muted">@_prevision.PorcentajeGasto% de los ingresos comprometido</small>
         </div>
     }
 
-    <h5 class="text-muted mb-3">@MesActual()</h5>
-
+    <!-- Tarjetas de resumen -->
     <div class="row g-2 mb-4">
         <div class="col-6">
             <div class="card text-bg-success">
@@ -82,40 +94,91 @@
         </div>
     </div>
 
-    <h6 class="text-muted">Últimos movimientos</h6>
-    @if (_ultimos.Count == 0)
-    {
-        <p class="text-muted small">Aún no hay movimientos este mes.</p>
-    }
-    else
-    {
-        <ul class="list-group list-group-flush">
-            @foreach (var mov in _ultimos)
-            {
-                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                    <div>
-                        <div>@mov.Concepto</div>
-                        <small class="text-muted">@mov.Fecha.ToString("dd/MM")</small>
+    <!-- Gráfico + categorías: columnas en PC, apilado en móvil -->
+    <div class="row g-4">
+
+        <!-- Gráfico últimos 6 meses -->
+        <div class="col-12 col-md-5">
+            <h6 class="text-muted mb-2">Ahorro últimos 6 meses</h6>
+            <div class="d-flex align-items-end gap-1" style="height:80px">
+                @foreach (var m in _historial)
+                {
+                    var h = _maxBalance > 0
+                        ? (int)((double)Math.Abs(m.Balance) / (double)_maxBalance * 76) + 4
+                        : 4;
+                    <div class="flex-fill d-flex align-items-end justify-content-center" style="height:80px">
+                        <div style="width:80%;max-width:36px;height:@(h)px;background:@(m.EsPositivo ? "#198754" : "#dc3545");border-radius:3px 3px 0 0"></div>
                     </div>
-                    <span class="fw-bold @(mov.Tipo == TipoMovimiento.Ingreso ? "text-success" : "text-danger")">
-                        @(mov.Tipo == TipoMovimiento.Ingreso ? "+" : "-")@mov.Importe.ToString("C")
-                    </span>
-                </li>
-            }
-        </ul>
-        <div class="text-end mt-1">
-            <a href="movimientos" class="small">Ver todos</a>
+                }
+            </div>
+            <div class="d-flex gap-1 mt-1">
+                @foreach (var m in _historial)
+                {
+                    <div class="flex-fill text-center" style="font-size:0.7rem;color:#888">@m.Etiqueta</div>
+                }
+            </div>
+            <div class="d-flex gap-1 mt-1">
+                @foreach (var m in _historial)
+                {
+                    <div class="flex-fill text-center" style="font-size:0.65rem;color:@(m.EsPositivo ? "#198754" : "#dc3545")">
+                        @(m.EsPositivo ? "+" : "")@m.Balance.ToString("N0")
+                    </div>
+                }
+            </div>
         </div>
-    }
+
+        <!-- Gastos por categoría -->
+        <div class="col-12 col-md-7">
+            <h6 class="text-muted mb-2">Gastos por categoría</h6>
+            @if (_gastosPorCategoria.Count == 0)
+            {
+                <p class="text-muted small">Sin gastos registrados este mes.</p>
+            }
+            else
+            {
+                @foreach (var cat in _gastosPorCategoria)
+                {
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small">@cat.Icono @cat.Nombre</span>
+                            <span class="small fw-bold text-danger">
+                                @cat.Total.ToString("C") <span class="text-muted fw-normal">@cat.Porcentaje.ToString("F0")%</span>
+                            </span>
+                        </div>
+                        <div class="progress" style="height:5px">
+                            <div class="progress-bar bg-danger" style="width:@cat.Porcentaje.ToString("F1", CultureInfo.InvariantCulture)%"></div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+    </div>
+
+    <!-- Ver todos -->
+    <div class="text-end mt-3">
+        <a href="movimientos" class="small">Ver todos los movimientos →</a>
+    </div>
 
 </div>
 
 @code {
     private PrevisionMensual? _prevision;
-    private List<Movimiento> _ultimos = [];
+    private int _mesVista;
+    private int _anyoVista;
+
+    private record MesBalance(string Etiqueta, decimal Balance, bool EsPositivo);
+    private record GastoCategoria(string Nombre, string Icono, decimal Total, decimal Porcentaje);
+
+    private List<MesBalance> _historial = [];
+    private List<GastoCategoria> _gastosPorCategoria = [];
+    private decimal _maxBalance = 1;
 
     protected override async Task OnInitializedAsync()
     {
+        var hoy = DateTime.Today;
+        _mesVista = hoy.Month;
+        _anyoVista = hoy.Year;
         Sync.OnSyncCompletado += OnSyncCompletado;
         Sync.OnEstadoCambiado += OnEstadoCambiado;
         Drive.OnEstadoCambiado += OnEstadoCambiado;
@@ -124,15 +187,75 @@
 
     private async Task Cargar()
     {
-        var hoy = DateTime.Today;
-        _prevision = await Prevision.CalcularAsync(hoy.Month, hoy.Year);
+        _prevision = await Prevision.CalcularAsync(_mesVista, _anyoVista);
 
         var todos = await Db.ObtenerMovimientosAsync();
-        _ultimos = todos
-            .Where(m => m.Fecha.Month == hoy.Month && m.Fecha.Year == hoy.Year)
-            .OrderByDescending(m => m.Fecha)
-            .Take(5)
+        var categorias = await Db.ObtenerCategoriasAsync();
+        var catById = categorias.ToDictionary(c => c.Id);
+        var es = new CultureInfo("es-ES");
+
+        // Historial 6 meses para el gráfico (relativos al mes que se está viendo)
+        _historial = [];
+        for (int i = 5; i >= 0; i--)
+        {
+            var fecha = new DateTime(_anyoVista, _mesVista, 1).AddMonths(-i);
+            var movMes = todos.Where(m => m.Fecha.Month == fecha.Month && m.Fecha.Year == fecha.Year);
+            var ingresos = movMes.Where(m => m.Tipo == TipoMovimiento.Ingreso).Sum(m => m.Importe);
+            var gastos   = movMes.Where(m => m.Tipo == TipoMovimiento.Gasto).Sum(m => m.Importe);
+            var balance  = ingresos - gastos;
+            _historial.Add(new MesBalance(
+                fecha.ToString("MMM", es),
+                balance,
+                balance >= 0
+            ));
+        }
+        _maxBalance = _historial.Max(m => Math.Abs(m.Balance));
+        if (_maxBalance == 0) _maxBalance = 1;
+
+        // Gastos reales del mes visible agrupados por categoría
+        var gastosMes = todos.Where(m =>
+            m.Fecha.Month == _mesVista && m.Fecha.Year == _anyoVista &&
+            m.Tipo == TipoMovimiento.Gasto).ToList();
+        var totalGastos = gastosMes.Sum(m => m.Importe);
+
+        _gastosPorCategoria = gastosMes
+            .GroupBy(m => m.CategoriaId)
+            .Select(g =>
+            {
+                var cat   = catById.TryGetValue(g.Key, out var c) ? c : null;
+                var total = g.Sum(m => m.Importe);
+                return new GastoCategoria(
+                    cat?.Nombre ?? "Sin categoría",
+                    cat?.Icono  ?? "•",
+                    total,
+                    totalGastos > 0 ? Math.Round(total / totalGastos * 100, 1) : 0
+                );
+            })
+            .OrderByDescending(g => g.Total)
             .ToList();
+    }
+
+    private async Task MesAnterior()
+    {
+        var fecha = new DateTime(_anyoVista, _mesVista, 1).AddMonths(-1);
+        _mesVista  = fecha.Month;
+        _anyoVista = fecha.Year;
+        await Cargar();
+    }
+
+    private async Task MesSiguiente()
+    {
+        if (EsMesActual()) return;
+        var fecha = new DateTime(_anyoVista, _mesVista, 1).AddMonths(1);
+        _mesVista  = fecha.Month;
+        _anyoVista = fecha.Year;
+        await Cargar();
+    }
+
+    private bool EsMesActual()
+    {
+        var hoy = DateTime.Today;
+        return _mesVista == hoy.Month && _anyoVista == hoy.Year;
     }
 
     private async Task OnSyncCompletado()
@@ -150,9 +273,9 @@
         Drive.OnEstadoCambiado -= OnEstadoCambiado;
     }
 
-    private string MesActual() =>
-        new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)
-            .ToString("MMMM yyyy", new System.Globalization.CultureInfo("es-ES"));
+    private string NombreMes() =>
+        new DateTime(_anyoVista, _mesVista, 1)
+            .ToString("MMMM yyyy", new CultureInfo("es-ES"));
 
     private string AlertClass() => _prevision?.Nivel switch
     {
@@ -179,6 +302,6 @@
     {
         NivelAlerta.Aviso   => "Atención: superas el 80% de tus ingresos previstos",
         NivelAlerta.Peligro => $"Los gastos superan los ingresos en {Math.Abs(_prevision.Margen):C}",
-        _                   => $"Margen disponible este mes"
+        _                   => "Margen disponible este mes"
     };
 }
