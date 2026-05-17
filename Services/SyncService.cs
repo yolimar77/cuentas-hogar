@@ -194,16 +194,23 @@ public class SyncService(DriveService drive, LocalDbService db)
         }
         foreach (var id in eliminados) merged.Remove(id);
 
-        var lista = merged.Values.ToList();
+        // Si dos dispositivos crearon categorías con el mismo nombre+tipo pero distinto ID
+        // (ocurre con las categorías por defecto), queda la más reciente
+        var lista = merged.Values
+            .GroupBy(c => $"{c.Nombre.Trim().ToLowerInvariant()}_{(int)c.Tipo}")
+            .Select(g => g.OrderByDescending(c => c.ModificadoEn).First())
+            .ToList();
+
         var json = JsonSerializer.Serialize(lista);
         if (idx.TryGetValue(NombreCats, out var archivoExistente))
             await drive.ActualizarContenidoAsync(archivoExistente.Id, json);
         else
             await drive.SubirArchivoAsync(NombreCats, json);
 
+        var listaIds = lista.Select(c => c.Id).ToHashSet();
         bool hayCambios = lista.Count != local.Count
             || lista.Any(c => !localById.ContainsKey(c.Id))
-            || local.Any(c => !merged.ContainsKey(c.Id))
+            || local.Any(c => !listaIds.Contains(c.Id))
             || lista.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn);
 
         await db.ReemplazarCategoriasAsync(lista);
@@ -234,16 +241,22 @@ public class SyncService(DriveService drive, LocalDbService db)
         }
         foreach (var id in eliminados) merged.Remove(id);
 
-        var lista = merged.Values.ToList();
+        // Desduplicar por nombre (mismo problema que categorías con los datos por defecto)
+        var lista = merged.Values
+            .GroupBy(c => c.Nombre.Trim().ToLowerInvariant())
+            .Select(g => g.OrderByDescending(c => c.ModificadoEn).First())
+            .ToList();
+
         var json = JsonSerializer.Serialize(lista);
         if (idx.TryGetValue(NombreCuents, out var archivoExistente))
             await drive.ActualizarContenidoAsync(archivoExistente.Id, json);
         else
             await drive.SubirArchivoAsync(NombreCuents, json);
 
+        var listaIds = lista.Select(c => c.Id).ToHashSet();
         bool hayCambios = lista.Count != local.Count
             || lista.Any(c => !localById.ContainsKey(c.Id))
-            || local.Any(c => !merged.ContainsKey(c.Id))
+            || local.Any(c => !listaIds.Contains(c.Id))
             || lista.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn);
 
         await db.ReemplazarCuentasAsync(lista);
