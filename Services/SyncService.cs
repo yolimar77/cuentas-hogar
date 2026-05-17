@@ -36,18 +36,18 @@ public class SyncService(DriveService drive, LocalDbService db)
             // 1. Propagar eliminaciones
             var eliminados = await SincronizarEliminacionesAsync(idx);
 
-            // 2. Categorías y cuentas primero para tener los IDs válidos antes de procesar movimientos
-            int cambiosCat   = await MergeCategoriasAsync(idx, eliminados);
-            int cambiosCuent = await MergeCuentasAsync(idx, eliminados);
-
-            // 3. Limpiar referencias rotas en movimientos y recurrentes
-            int cambiosReparacion = await RepararReferenciasAsync();
-
-            // 4. Merge movimientos y recurrentes
+            // 2. Merge movimientos y recurrentes
             int cambiosMov = await MergeMovimientosAsync(idx, eliminados);
             int cambiosRec = await MergeRecurrentesAsync(idx, eliminados);
 
-            int totalCambios = cambiosMov + cambiosRec + cambiosCat + cambiosCuent + cambiosReparacion;
+            // 3. Categorías y cuentas
+            int cambiosCat   = await MergeCategoriasAsync(idx, eliminados);
+            int cambiosCuent = await MergeCuentasAsync(idx, eliminados);
+
+            // 4. Propagar categoría/cuenta del recurrente a sus movimientos generados
+            int cambiosPropagacion = await PropagarcategoriasRecurrentesAsync();
+
+            int totalCambios = cambiosMov + cambiosRec + cambiosCat + cambiosCuent + cambiosPropagacion;
             UltimaSincronizacion = DateTime.Now;
             UltimoDetalle = $"Sync OK · {totalCambios} cambios";
 
@@ -75,40 +75,30 @@ public class SyncService(DriveService drive, LocalDbService db)
             await drive.EliminarArchivoAsync(arc.Id);
     }
 
-    // --- Reparar referencias rotas ---
-    // Limpia CategoriaId/CuentaId que apuntan a IDs que ya no existen.
-    // Esto ocurre cuando una sincronización anterior eliminó IDs de categorías/cuentas
-    // sin actualizar los movimientos que los referenciaban.
-    private async Task<int> RepararReferenciasAsync()
+    // --- Propagar categoría/cuenta del recurrente a sus movimientos generados ---
+    // Los movimientos generados por recurrentes heredan la categoría y cuenta del recurrente.
+    // Si el recurrente fue editado o sincronizado con nuevos IDs, los movimientos se actualizan.
+    // Los movimientos con RecurrenteId nulo no se tocan.
+    private async Task<int> PropagarcategoriasRecurrentesAsync()
     {
-        var catIds   = (await db.ObtenerCategoriasAsync()).Select(c => c.Id).ToHashSet();
-        var cuentIds = (await db.ObtenerCuentasAsync()).Select(c => c.Id).ToHashSet();
-
-        var movimientos  = await db.ObtenerMovimientosAsync();
-        var recurrentes  = await db.ObtenerRecurrentesAsync();
+        var recurrentes = await db.ObtenerRecurrentesAsync();
+        var movimientos = await db.ObtenerMovimientosAsync();
+        var recById     = recurrentes.ToDictionary(r => r.Id);
 
         bool cambio = false;
-
-        foreach (var mov in movimientos)
+        foreach (var mov in movimientos.Where(m => m.RecurrenteId != null))
         {
-            if (!string.IsNullOrEmpty(mov.CategoriaId) && !catIds.Contains(mov.CategoriaId))
-            { mov.CategoriaId = ""; cambio = true; }
-            if (!string.IsNullOrEmpty(mov.CuentaId) && !cuentIds.Contains(mov.CuentaId))
-            { mov.CuentaId = ""; cambio = true; }
-        }
-        foreach (var rec in recurrentes)
-        {
-            if (!string.IsNullOrEmpty(rec.CategoriaId) && !catIds.Contains(rec.CategoriaId))
-            { rec.CategoriaId = ""; cambio = true; }
-            if (!string.IsNullOrEmpty(rec.CuentaId) && !cuentIds.Contains(rec.CuentaId))
-            { rec.CuentaId = ""; cambio = true; }
+            if (!recById.TryGetValue(mov.RecurrenteId!, out var rec)) continue;
+            if (mov.CategoriaId != rec.CategoriaId || mov.CuentaId != rec.CuentaId)
+            {
+                mov.CategoriaId = rec.CategoriaId;
+                mov.CuentaId    = rec.CuentaId;
+                cambio = true;
+            }
         }
 
         if (cambio)
-        {
             await db.ReemplazarMovimientosAsync(movimientos);
-            await db.ReemplazarRecurrentesAsync(recurrentes);
-        }
 
         return cambio ? 1 : 0;
     }
