@@ -253,17 +253,19 @@
             m.Tipo == TipoMovimiento.Gasto).ToList();
         var totalGastos = gastosMes.Sum(m => m.Importe);
 
-        // Agrupar por el ID de categoría resuelto: los GUIDs rotos o vacíos
-        // van todos al mismo grupo "Sin categoría" en vez de uno por GUID
+        // Agrupar por nombre resuelto para que IDs duplicados con el mismo nombre
+        // (herencia de la inicialización multi-dispositivo anterior) queden en un único grupo
         _gastosPorCategoria = gastosMes
-            .GroupBy(m => catById.ContainsKey(m.CategoriaId ?? "") ? (m.CategoriaId ?? "") : "")
+            .GroupBy(m => catById.TryGetValue(m.CategoriaId ?? "", out var c) ? c.Nombre : "Sin categoría")
             .Select(g =>
             {
-                var cat   = catById.TryGetValue(g.Key, out var c) ? c : null;
+                var icono = g
+                    .Select(m => catById.TryGetValue(m.CategoriaId ?? "", out var c) ? c.Icono : null)
+                    .FirstOrDefault(i => i != null) ?? "•";
                 var total = g.Sum(m => m.Importe);
                 return new GastoCategoria(
-                    cat?.Nombre ?? "Sin categoría",
-                    cat?.Icono  ?? "•",
+                    g.Key,
+                    icono,
                     total,
                     totalGastos > 0 ? Math.Round(total / totalGastos * 100, 1) : 0
                 );
