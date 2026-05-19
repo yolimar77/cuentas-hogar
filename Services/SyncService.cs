@@ -75,24 +75,37 @@ public class SyncService(DriveService drive, LocalDbService db)
             await drive.EliminarArchivoAsync(arc.Id);
     }
 
-    // --- Propagar categoría/cuenta del recurrente a sus movimientos generados ---
-    // Los movimientos generados por recurrentes heredan la categoría y cuenta del recurrente.
-    // Si el recurrente fue editado o sincronizado con nuevos IDs, los movimientos se actualizan.
-    // Los movimientos con RecurrenteId nulo no se tocan.
+    // Punto de entrada público para propagar desde la UI (al guardar un recurrente)
+    public async Task PropagateRecurrentesAsync() =>
+        await PropagarcategoriasRecurrentesAsync();
+
+    // Categoría y cuenta: se propagan siempre (son clasificaciones, no afectan al histórico).
+    // Importe y concepto: solo a movimientos con fecha >= hoy, para respetar el histórico real.
     private async Task<int> PropagarcategoriasRecurrentesAsync()
     {
         var recurrentes = await db.ObtenerRecurrentesAsync();
         var movimientos = await db.ObtenerMovimientosAsync();
         var recById     = recurrentes.ToDictionary(r => r.Id);
+        var hoy         = DateTime.Today;
 
         bool cambio = false;
         foreach (var mov in movimientos.Where(m => m.RecurrenteId != null))
         {
             if (!recById.TryGetValue(mov.RecurrenteId!, out var rec)) continue;
+
             if (mov.CategoriaId != rec.CategoriaId || mov.CuentaId != rec.CuentaId)
             {
-                mov.CategoriaId = rec.CategoriaId;
-                mov.CuentaId    = rec.CuentaId;
+                mov.CategoriaId  = rec.CategoriaId;
+                mov.CuentaId     = rec.CuentaId;
+                mov.ModificadoEn = DateTime.UtcNow;
+                cambio = true;
+            }
+
+            if (mov.Fecha >= hoy && (mov.Importe != rec.Importe || mov.Concepto != rec.Concepto))
+            {
+                mov.Importe      = rec.Importe;
+                mov.Concepto     = rec.Concepto;
+                mov.ModificadoEn = DateTime.UtcNow;
                 cambio = true;
             }
         }

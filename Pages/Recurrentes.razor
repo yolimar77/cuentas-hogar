@@ -226,6 +226,7 @@
         {
             await Db.GuardarRecurrenteAsync(_nuevo);
             await Prevision.GenerarMovimientosRecurrentesAsync();
+            await Sync.PropagateRecurrentesAsync();
             await Cargar();
             _mostrarFormulario = false;
             _ = Sync.SincronizarAsync();
