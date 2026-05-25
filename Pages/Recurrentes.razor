@@ -257,6 +257,18 @@
         try
         {
             await Db.GuardarRecurrenteAsync(_nuevo);
+
+            // Al editar, borrar movimientos futuros generados para regenerarlos con la nueva configuración
+            // (necesario si cambia la frecuencia o el día). No se añaden tombstones porque son auto-generados.
+            if (_esEdicion)
+            {
+                var hoy   = DateTime.Today;
+                var todos = await Db.ObtenerMovimientosAsync();
+                var sinFuturos = todos.Where(m => !(m.RecurrenteId == _nuevo.Id && m.Fecha >= hoy)).ToList();
+                if (sinFuturos.Count != todos.Count)
+                    await Db.ReemplazarMovimientosAsync(sinFuturos);
+            }
+
             await Prevision.GenerarMovimientosRecurrentesAsync();
             await Sync.PropagateRecurrentesAsync();
             await Cargar();
