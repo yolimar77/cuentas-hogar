@@ -157,7 +157,10 @@
         _movimientos = todos
             .Where(m => m.Fecha.Month == _mesFiltro.Month && m.Fecha.Year == _mesFiltro.Year)
             .ToList();
-        _categorias = await Db.ObtenerCategoriasAsync();
+        _categorias = (await Db.ObtenerCategoriasAsync())
+            .GroupBy(c => (c.Nombre, c.Tipo))
+            .Select(g => g.First())
+            .ToList();
         _cuentas = await Db.ObtenerCuentasAsync();
     }
 

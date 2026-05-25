@@ -169,7 +169,10 @@
         var todos = await Db.ObtenerRecurrentesAsync();
         _ingresos = todos.Where(r => r.Tipo == TipoMovimiento.Ingreso && r.Activo).ToList();
         _gastos = todos.Where(r => r.Tipo == TipoMovimiento.Gasto && r.Activo).ToList();
-        _categorias = await Db.ObtenerCategoriasAsync();
+        _categorias = (await Db.ObtenerCategoriasAsync())
+            .GroupBy(c => (c.Nombre, c.Tipo))
+            .Select(g => g.First())
+            .ToList();
         _cuentas = await Db.ObtenerCuentasAsync();
     }
 
