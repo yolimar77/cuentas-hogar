@@ -218,7 +218,10 @@
     private async Task Cargar()
     {
         _cuentas = await Db.ObtenerCuentasAsync();
-        _categorias = await Db.ObtenerCategoriasAsync();
+        _categorias = (await Db.ObtenerCategoriasAsync())
+            .GroupBy(c => (c.Nombre, c.Tipo))
+            .Select(g => g.FirstOrDefault(x => x.Id.StartsWith("def-")) ?? g.First())
+            .ToList();
     }
 
     private void AbrirNuevaCuenta() { _nuevaCuenta = new Cuenta(); _mostrarCuenta = true; }
@@ -257,7 +260,25 @@
     }
 
     private async Task EliminarCuenta(string id) { await Db.EliminarCuentaAsync(id); await Cargar(); _ = Sync.SincronizarAsync(); }
-    private async Task EliminarCategoria(string id) { await Db.EliminarCategoriaAsync(id); await Cargar(); _ = Sync.SincronizarAsync(); }
+
+    private async Task EliminarCategoria(string id)
+    {
+        // Eliminar también duplicados con el mismo nombre+tipo para limpiar la BD
+        var target = (await Db.ObtenerCategoriasAsync()).FirstOrDefault(c => c.Id == id);
+        if (target is not null)
+        {
+            var todas = await Db.ObtenerCategoriasAsync();
+            var duplicados = todas.Where(c => c.Nombre == target.Nombre && c.Tipo == target.Tipo).ToList();
+            foreach (var dup in duplicados)
+                await Db.EliminarCategoriaAsync(dup.Id);
+        }
+        else
+        {
+            await Db.EliminarCategoriaAsync(id);
+        }
+        await Cargar();
+        _ = Sync.SincronizarAsync();
+    }
 
     private async Task Conectar()
     {
