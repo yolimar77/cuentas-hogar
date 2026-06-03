@@ -217,7 +217,10 @@
 
     private async Task Cargar()
     {
-        _cuentas = await Db.ObtenerCuentasAsync();
+        _cuentas = (await Db.ObtenerCuentasAsync())
+            .GroupBy(c => c.Nombre)
+            .Select(g => g.FirstOrDefault(x => x.Id.StartsWith("def-")) ?? g.First())
+            .ToList();
         _categorias = (await Db.ObtenerCategoriasAsync())
             .GroupBy(c => (c.Nombre, c.Tipo))
             .Select(g => g.FirstOrDefault(x => x.Id.StartsWith("def-")) ?? g.First())
@@ -259,7 +262,22 @@
         }
     }
 
-    private async Task EliminarCuenta(string id) { await Db.EliminarCuentaAsync(id); await Cargar(); _ = Sync.SincronizarAsync(); }
+    private async Task EliminarCuenta(string id)
+    {
+        var target = (await Db.ObtenerCuentasAsync()).FirstOrDefault(c => c.Id == id);
+        if (target is not null)
+        {
+            var todas = await Db.ObtenerCuentasAsync();
+            foreach (var dup in todas.Where(c => c.Nombre == target.Nombre))
+                await Db.EliminarCuentaAsync(dup.Id);
+        }
+        else
+        {
+            await Db.EliminarCuentaAsync(id);
+        }
+        await Cargar();
+        _ = Sync.SincronizarAsync();
+    }
 
     private async Task EliminarCategoria(string id)
     {
