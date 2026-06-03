@@ -20,15 +20,15 @@ public class PrevisionMensual
     // Suma de márgenes reales de todos los meses anteriores al visualizado
     public decimal SaldoAcumulado { get; set; }
 
-    // Balance y alerta basados en lo real + saldo acumulado de meses anteriores
-    public decimal Margen => IngresosReales - GastosReales + SaldoAcumulado;
+    // Balance del mes en curso (sin acumulado)
+    public decimal Margen => IngresosReales - GastosReales;
 
-    // Base disponible = ingresos reales +/- saldo acumulado (negativo si se debía dinero)
-    private decimal BaseDisponible => IngresosReales + SaldoAcumulado;
+    // Saldo total = margen del mes + lo acumulado de meses anteriores
+    public decimal SaldoTotal => Margen + SaldoAcumulado;
 
-    public decimal PorcentajeGasto => BaseDisponible <= 0
+    public decimal PorcentajeGasto => IngresosReales == 0
         ? (GastosReales == 0 ? 0 : 100)
-        : Math.Round(GastosReales / BaseDisponible * 100, 1);
+        : Math.Round(GastosReales / IngresosReales * 100, 1);
 
     public NivelAlerta Nivel => PorcentajeGasto switch
     {
