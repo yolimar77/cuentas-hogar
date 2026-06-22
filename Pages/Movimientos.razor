@@ -53,8 +53,27 @@
     else
     {
         <ul class="list-group list-group-flush">
-            @foreach (var mov in MovimientosOrdenados())
+            @{
+                var ordenados = MovimientosOrdenados().ToList();
+                bool seccionIngresosVisible = false;
+                bool seccionGastosVisible = false;
+            }
+            @foreach (var mov in ordenados)
             {
+                @if (_ordenarPor == "tipo" && !seccionGastosVisible && mov.Tipo == TipoMovimiento.Gasto)
+                {
+                    seccionGastosVisible = true;
+                    <li class="list-group-item px-0 py-1">
+                        <small class="fw-semibold text-danger" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Gastos</small>
+                    </li>
+                }
+                @if (_ordenarPor == "tipo" && !seccionIngresosVisible && mov.Tipo == TipoMovimiento.Ingreso)
+                {
+                    seccionIngresosVisible = true;
+                    <li class="list-group-item px-0 py-1">
+                        <small class="fw-semibold text-success" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Ingresos</small>
+                    </li>
+                }
                 <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                     <div>
                         <div>@mov.Concepto @(mov.RecurrenteId is not null ? new MarkupString("<i class=\"ph-bold ph-repeat\" style=\"font-size:0.8rem;opacity:0.6\"></i>") : new MarkupString(""))</div>
