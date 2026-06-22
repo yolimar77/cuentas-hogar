@@ -238,8 +238,8 @@
 
     private IEnumerable<Movimiento> MovimientosOrdenados() => _ordenarPor switch
     {
-        "tipo"    when  _ordenAscendente => _movimientos.OrderBy(m => NombreCategoria(m.CategoriaId)).ThenByDescending(m => m.Fecha),
-        "tipo"                           => _movimientos.OrderByDescending(m => NombreCategoria(m.CategoriaId)).ThenByDescending(m => m.Fecha),
+        "tipo"    when  _ordenAscendente => _movimientos.OrderBy(m => m.Tipo == TipoMovimiento.Ingreso ? 1 : 0).ThenBy(m => NombreCategoria(m.CategoriaId)).ThenByDescending(m => m.Fecha),
+        "tipo"                           => _movimientos.OrderBy(m => m.Tipo == TipoMovimiento.Ingreso ? 1 : 0).ThenByDescending(m => NombreCategoria(m.CategoriaId)).ThenByDescending(m => m.Fecha),
         "importe" when  _ordenAscendente => _movimientos.OrderBy(m => m.Importe),
         "importe"                        => _movimientos.OrderByDescending(m => m.Importe),
         _         when  _ordenAscendente => _movimientos.OrderBy(m => m.Fecha),
