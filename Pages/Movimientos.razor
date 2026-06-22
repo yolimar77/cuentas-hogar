@@ -39,7 +39,7 @@
             Fecha @if (_ordenarPor == "fecha") { <i class="ph-bold @(_ordenAscendente ? "ph-sort-ascending" : "ph-sort-descending")" style="font-size:0.8rem"></i> }
         </button>
         <button class="btn btn-sm @(_ordenarPor == "tipo"     ? "btn-secondary" : "btn-outline-secondary")" @onclick='() => CambiarOrden("tipo")'>
-            Tipo @if (_ordenarPor == "tipo") { <i class="ph-bold @(_ordenAscendente ? "ph-sort-ascending" : "ph-sort-descending")" style="font-size:0.8rem"></i> }
+            Categoría @if (_ordenarPor == "tipo") { <i class="ph-bold @(_ordenAscendente ? "ph-sort-ascending" : "ph-sort-descending")" style="font-size:0.8rem"></i> }
         </button>
         <button class="btn btn-sm @(_ordenarPor == "importe"  ? "btn-secondary" : "btn-outline-secondary")" @onclick='() => CambiarOrden("importe")'>
             Importe @if (_ordenarPor == "importe") { <i class="ph-bold @(_ordenAscendente ? "ph-sort-ascending" : "ph-sort-descending")" style="font-size:0.8rem"></i> }
@@ -238,8 +238,8 @@
 
     private IEnumerable<Movimiento> MovimientosOrdenados() => _ordenarPor switch
     {
-        "tipo"    when  _ordenAscendente => _movimientos.OrderBy(m => m.Tipo).ThenByDescending(m => m.Fecha),
-        "tipo"                           => _movimientos.OrderByDescending(m => m.Tipo).ThenByDescending(m => m.Fecha),
+        "tipo"    when  _ordenAscendente => _movimientos.OrderBy(m => NombreCategoria(m.CategoriaId)).ThenByDescending(m => m.Fecha),
+        "tipo"                           => _movimientos.OrderByDescending(m => NombreCategoria(m.CategoriaId)).ThenByDescending(m => m.Fecha),
         "importe" when  _ordenAscendente => _movimientos.OrderBy(m => m.Importe),
         "importe"                        => _movimientos.OrderByDescending(m => m.Importe),
         _         when  _ordenAscendente => _movimientos.OrderBy(m => m.Fecha),
