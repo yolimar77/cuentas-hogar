@@ -35,18 +35,15 @@
 
     <!-- Ordenación -->
     <div class="d-flex gap-1 mb-2">
-        @foreach (var (etiqueta, campo) in new[] { ("Fecha", "fecha"), ("Tipo", "tipo"), ("Importe", "importe") })
-        {
-            var activo = _ordenarPor == campo;
-            <button class="btn btn-sm @(activo ? "btn-secondary" : "btn-outline-secondary")"
-                    @onclick="() => CambiarOrden(campo)">
-                @etiqueta
-                @if (activo)
-                {
-                    <i class="ph-bold @(_ordenAscendente ? "ph-sort-ascending" : "ph-sort-descending")" style="font-size:0.8rem"></i>
-                }
-            </button>
-        }
+        <button class="btn btn-sm @(_ordenarPor == "fecha"    ? "btn-secondary" : "btn-outline-secondary")" @onclick='() => CambiarOrden("fecha")'>
+            Fecha @if (_ordenarPor == "fecha") { <i class="ph-bold @(_ordenAscendente ? "ph-sort-ascending" : "ph-sort-descending")" style="font-size:0.8rem"></i> }
+        </button>
+        <button class="btn btn-sm @(_ordenarPor == "tipo"     ? "btn-secondary" : "btn-outline-secondary")" @onclick='() => CambiarOrden("tipo")'>
+            Tipo @if (_ordenarPor == "tipo") { <i class="ph-bold @(_ordenAscendente ? "ph-sort-ascending" : "ph-sort-descending")" style="font-size:0.8rem"></i> }
+        </button>
+        <button class="btn btn-sm @(_ordenarPor == "importe"  ? "btn-secondary" : "btn-outline-secondary")" @onclick='() => CambiarOrden("importe")'>
+            Importe @if (_ordenarPor == "importe") { <i class="ph-bold @(_ordenAscendente ? "ph-sort-ascending" : "ph-sort-descending")" style="font-size:0.8rem"></i> }
+        </button>
     </div>
 
     @if (_movimientos.Count == 0)
