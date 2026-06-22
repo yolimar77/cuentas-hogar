@@ -239,14 +239,13 @@
         else { _ordenarPor = campo; _ordenAscendente = campo != "fecha"; }
     }
 
-    private IEnumerable<Movimiento> MovimientosOrdenados()
+    private IEnumerable<Movimiento> MovimientosOrdenados() => _ordenarPor switch
     {
-        IEnumerable<Movimiento> q = _ordenarPor switch
-        {
-            "tipo"    => _movimientos.OrderBy(m => m.Tipo).ThenByDescending(m => m.Fecha),
-            "importe" => _movimientos.OrderBy(m => m.Importe),
-            _         => _movimientos.OrderBy(m => m.Fecha)
-        };
-        return _ordenAscendente ? q : q.Reverse();
-    }
+        "tipo"    when  _ordenAscendente => _movimientos.OrderBy(m => m.Tipo).ThenByDescending(m => m.Fecha),
+        "tipo"                           => _movimientos.OrderByDescending(m => m.Tipo).ThenByDescending(m => m.Fecha),
+        "importe" when  _ordenAscendente => _movimientos.OrderBy(m => m.Importe),
+        "importe"                        => _movimientos.OrderByDescending(m => m.Importe),
+        _         when  _ordenAscendente => _movimientos.OrderBy(m => m.Fecha),
+        _                                => _movimientos.OrderByDescending(m => m.Fecha),
+    };
 }
