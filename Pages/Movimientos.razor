@@ -233,7 +233,7 @@
     private void CambiarOrden(string campo)
     {
         if (_ordenarPor == campo) _ordenAscendente = !_ordenAscendente;
-        else { _ordenarPor = campo; _ordenAscendente = campo != "fecha"; }
+        else { _ordenarPor = campo; _ordenAscendente = false; }
     }
 
     private IEnumerable<Movimiento> MovimientosOrdenados() => _ordenarPor switch
