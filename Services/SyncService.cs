@@ -36,18 +36,26 @@ public class SyncService(DriveService drive, LocalDbService db)
             // 1. Propagar eliminaciones
             var eliminados = await SincronizarEliminacionesAsync(idx);
 
-            // 2. Merge movimientos y recurrentes
+            // 2. Categorías y cuentas primero: dos dispositivos pueden haber creado una
+            //    con el mismo nombre antes de sincronizar entre sí. MergeCategoriasAsync/
+            //    MergeCuentasAsync deduplican por nombre y devuelven el remap idPerdedor->idGanador.
+            var (cambiosCat, remapCats)     = await MergeCategoriasAsync(idx, eliminados);
+            var (cambiosCuent, remapCuents) = await MergeCuentasAsync(idx, eliminados);
+
+            // 3. Reparar movimientos/recurrentes que quedaran apuntando a un Id descartado
+            //    en el paso anterior. IMPORTANTE: no eliminar este paso sin preservar el
+            //    remapeo — quitarlo (como pasó una vez en el pasado) deja categorías en
+            //    blanco al sincronizar entre dispositivos.
+            int cambiosReparacion = await AplicarRemapReferenciasAsync(remapCats, remapCuents);
+
+            // 4. Merge movimientos y recurrentes
             int cambiosMov = await MergeMovimientosAsync(idx, eliminados);
             int cambiosRec = await MergeRecurrentesAsync(idx, eliminados);
 
-            // 3. Categorías y cuentas
-            int cambiosCat   = await MergeCategoriasAsync(idx, eliminados);
-            int cambiosCuent = await MergeCuentasAsync(idx, eliminados);
-
-            // 4. Propagar categoría/cuenta del recurrente a sus movimientos generados
+            // 5. Propagar categoría/cuenta del recurrente a sus movimientos generados
             int cambiosPropagacion = await PropagarcategoriasRecurrentesAsync();
 
-            int totalCambios = cambiosMov + cambiosRec + cambiosCat + cambiosCuent + cambiosPropagacion;
+            int totalCambios = cambiosMov + cambiosRec + cambiosCat + cambiosCuent + cambiosReparacion + cambiosPropagacion;
             UltimaSincronizacion = DateTime.Now;
             UltimoDetalle = $"Sync OK · {totalCambios} cambios";
 
@@ -78,6 +86,49 @@ public class SyncService(DriveService drive, LocalDbService db)
     // Punto de entrada público para propagar desde la UI (al guardar un recurrente)
     public async Task PropagateRecurrentesAsync() =>
         await PropagarcategoriasRecurrentesAsync();
+
+    // Repara movimientos y recurrentes que apunten a un CategoriaId/CuentaId descartado
+    // por la deduplicación de MergeCategoriasAsync/MergeCuentasAsync, en vez de dejarlos
+    // huérfanos (lo que se veía en la UI como categoría en blanco).
+    private async Task<int> AplicarRemapReferenciasAsync(
+        Dictionary<string, string> remapCats, Dictionary<string, string> remapCuents)
+    {
+        if (remapCats.Count == 0 && remapCuents.Count == 0) return 0;
+
+        bool cambio = false;
+        var movimientos = await db.ObtenerMovimientosAsync();
+        foreach (var mov in movimientos)
+        {
+            var cat    = remapCats.GetValueOrDefault(mov.CategoriaId, mov.CategoriaId);
+            var cuenta = remapCuents.GetValueOrDefault(mov.CuentaId, mov.CuentaId);
+            if (cat != mov.CategoriaId || cuenta != mov.CuentaId)
+            {
+                mov.CategoriaId  = cat;
+                mov.CuentaId     = cuenta;
+                mov.ModificadoEn = DateTime.UtcNow;
+                cambio = true;
+            }
+        }
+        if (cambio) await db.ReemplazarMovimientosAsync(movimientos);
+
+        bool cambioRec = false;
+        var recurrentes = await db.ObtenerRecurrentesAsync();
+        foreach (var rec in recurrentes)
+        {
+            var cat    = remapCats.GetValueOrDefault(rec.CategoriaId, rec.CategoriaId);
+            var cuenta = remapCuents.GetValueOrDefault(rec.CuentaId, rec.CuentaId);
+            if (cat != rec.CategoriaId || cuenta != rec.CuentaId)
+            {
+                rec.CategoriaId  = cat;
+                rec.CuentaId     = cuenta;
+                rec.ModificadoEn = DateTime.UtcNow;
+                cambioRec = true;
+            }
+        }
+        if (cambioRec) await db.ReemplazarRecurrentesAsync(recurrentes);
+
+        return (cambio || cambioRec) ? 1 : 0;
+    }
 
     // Categoría y cuenta: se propagan siempre (son clasificaciones, no afectan al histórico).
     // Importe y concepto: solo a movimientos con fecha >= hoy, para respetar el histórico real.
@@ -208,7 +259,8 @@ public class SyncService(DriveService drive, LocalDbService db)
 
     // --- Categorías ---
 
-    private async Task<int> MergeCategoriasAsync(Dictionary<string, DriveFileInfo> idx, HashSet<string> eliminados)
+    private async Task<(int cambios, Dictionary<string, string> remap)> MergeCategoriasAsync(
+        Dictionary<string, DriveFileInfo> idx, HashSet<string> eliminados)
     {
         var local     = await db.ObtenerCategoriasAsync();
         var localById = local.ToDictionary(c => c.Id);
@@ -230,7 +282,19 @@ public class SyncService(DriveService drive, LocalDbService db)
         }
         foreach (var id in eliminados) merged.Remove(id);
 
-        var lista = merged.Values.ToList();
+        // Dos dispositivos pueden haber creado una categoría con el mismo nombre+tipo
+        // antes de sincronizar entre sí: quedan como filas distintas con el mismo
+        // Nombre pero Id diferente. Nos quedamos con la más antigua (la más probable
+        // de tener ya movimientos históricos) y devolvemos el remap idPerdedor->idGanador.
+        var remap = new Dictionary<string, string>();
+        var lista = new List<Categoria>();
+        foreach (var grupo in merged.Values.GroupBy(c => (c.Nombre.Trim().ToLowerInvariant(), c.Tipo)))
+        {
+            var ganador = grupo.OrderBy(c => c.ModificadoEn).First();
+            lista.Add(ganador);
+            foreach (var perdedor in grupo.Where(c => c.Id != ganador.Id))
+                remap[perdedor.Id] = ganador.Id;
+        }
 
         var json = JsonSerializer.Serialize(lista);
         if (idx.TryGetValue(NombreCats, out var archivoExistente))
@@ -242,15 +306,17 @@ public class SyncService(DriveService drive, LocalDbService db)
         bool hayCambios = lista.Count != local.Count
             || lista.Any(c => !localById.ContainsKey(c.Id))
             || local.Any(c => !listaIds.Contains(c.Id))
-            || lista.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn);
+            || lista.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn)
+            || remap.Count > 0;
 
         await db.ReemplazarCategoriasAsync(lista);
-        return hayCambios ? 1 : 0;
+        return (hayCambios ? 1 : 0, remap);
     }
 
     // --- Cuentas ---
 
-    private async Task<int> MergeCuentasAsync(Dictionary<string, DriveFileInfo> idx, HashSet<string> eliminados)
+    private async Task<(int cambios, Dictionary<string, string> remap)> MergeCuentasAsync(
+        Dictionary<string, DriveFileInfo> idx, HashSet<string> eliminados)
     {
         var local     = await db.ObtenerCuentasAsync();
         var localById = local.ToDictionary(c => c.Id);
@@ -272,7 +338,17 @@ public class SyncService(DriveService drive, LocalDbService db)
         }
         foreach (var id in eliminados) merged.Remove(id);
 
-        var lista = merged.Values.ToList();
+        // Mismo problema que con las categorías: dos dispositivos pueden haber creado
+        // la misma cuenta con Ids distintos antes de sincronizar. Ver MergeCategoriasAsync.
+        var remap = new Dictionary<string, string>();
+        var lista = new List<Cuenta>();
+        foreach (var grupo in merged.Values.GroupBy(c => c.Nombre.Trim().ToLowerInvariant()))
+        {
+            var ganadora = grupo.OrderBy(c => c.ModificadoEn).First();
+            lista.Add(ganadora);
+            foreach (var perdedora in grupo.Where(c => c.Id != ganadora.Id))
+                remap[perdedora.Id] = ganadora.Id;
+        }
 
         var json = JsonSerializer.Serialize(lista);
         if (idx.TryGetValue(NombreCuents, out var archivoExistente))
@@ -284,10 +360,11 @@ public class SyncService(DriveService drive, LocalDbService db)
         bool hayCambios = lista.Count != local.Count
             || lista.Any(c => !localById.ContainsKey(c.Id))
             || local.Any(c => !listaIds.Contains(c.Id))
-            || lista.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn);
+            || lista.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn)
+            || remap.Count > 0;
 
         await db.ReemplazarCuentasAsync(lista);
-        return hayCambios ? 1 : 0;
+        return (hayCambios ? 1 : 0, remap);
     }
 
     // --- Eliminaciones ---
