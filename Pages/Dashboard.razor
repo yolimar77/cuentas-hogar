@@ -158,8 +158,19 @@
                     var h = _maxBalance > 0
                         ? (int)((double)Math.Abs(m.Balance) / (double)_maxBalance * 76) + 4
                         : 4;
-                    <div class="flex-fill d-flex align-items-end justify-content-center" style="height:80px">
-                        <div style="width:80%;max-width:36px;height:@(h)px;background:@(m.EsPositivo ? "#198754" : "#dc3545");border-radius:3px 3px 0 0"></div>
+                    <div class="flex-fill d-flex align-items-end justify-content-center position-relative" style="height:80px">
+                        @if (m.BalanceAjustado is decimal ajustado && ajustado != m.Balance)
+                        {
+                            var hAjustado = _maxBalance > 0
+                                ? (int)((double)Math.Abs(ajustado) / (double)_maxBalance * 76) + 4
+                                : 4;
+                            <div style="position:absolute;bottom:0;width:80%;max-width:36px;height:@(h)px;background:@(m.EsPositivo ? "#198754" : "#dc3545");opacity:0.35;border-radius:3px 3px 0 0"></div>
+                            <div style="position:absolute;bottom:0;width:80%;max-width:36px;height:@(hAjustado)px;background:@(ajustado >= 0 ? "#198754" : "#dc3545");border-radius:3px 3px 0 0"></div>
+                        }
+                        else
+                        {
+                            <div style="width:80%;max-width:36px;height:@(h)px;background:@(m.EsPositivo ? "#198754" : "#dc3545");border-radius:3px 3px 0 0"></div>
+                        }
                     </div>
                 }
             </div>
@@ -263,7 +274,7 @@
     private int _mesVista;
     private int _anyoVista;
 
-    private record MesBalance(string Etiqueta, decimal Balance, bool EsPositivo);
+    private record MesBalance(string Etiqueta, decimal Balance, bool EsPositivo, decimal? BalanceAjustado = null);
     private record GastoCategoria(string Nombre, string Icono, decimal Total, decimal Porcentaje);
 
     private List<MesBalance> _historial = [];
@@ -315,10 +326,11 @@
             _historial.Add(new MesBalance(
                 fecha.ToString("MMM", es),
                 balance,
-                balance >= 0
+                balance >= 0,
+                i == 0 ? _prevision?.Margen : null
             ));
         }
-        _maxBalance = _historial.Max(m => Math.Abs(m.Balance));
+        _maxBalance = _historial.Max(m => Math.Max(Math.Abs(m.Balance), Math.Abs(m.BalanceAjustado ?? m.Balance)));
         if (_maxBalance == 0) _maxBalance = 1;
 
         // Gastos reales del mes visible agrupados por categoría
