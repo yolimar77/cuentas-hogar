@@ -22,7 +22,7 @@
                 <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                     <div>
                         <div>@rec.Concepto</div>
-                        <small class="text-muted">@DescripcionFrecuencia(rec) · hasta @rec.FechaFin.ToString("MM/yyyy")</small>
+                        <small class="text-muted">@DescripcionFrecuencia(rec) · @(rec.FechaFin.HasValue ? $"hasta {rec.FechaFin.Value:MM/yyyy}" : "indefinido")</small>
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span class="fw-bold text-success">+@rec.Importe.ToString("C")</span>
@@ -43,7 +43,7 @@
                 <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                     <div>
                         <div>@rec.Concepto</div>
-                        <small class="text-muted">@DescripcionFrecuencia(rec) · hasta @rec.FechaFin.ToString("MM/yyyy")</small>
+                        <small class="text-muted">@DescripcionFrecuencia(rec) · @(rec.FechaFin.HasValue ? $"hasta {rec.FechaFin.Value:MM/yyyy}" : "indefinido")</small>
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span class="fw-bold text-danger">-@rec.Importe.ToString("C")</span>
@@ -128,10 +128,17 @@
                         <label class="form-label small">Desde</label>
                         <input class="form-control" type="date" @bind="_nuevo.FechaInicio" />
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label small">Hasta (fecha fin)</label>
-                        <input class="form-control" type="date" @bind="_nuevo.FechaFin" />
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="sinFechaFin" @bind="SinFechaFin" />
+                        <label class="form-check-label small" for="sinFechaFin">Sin fecha de fin</label>
                     </div>
+                    @if (!SinFechaFin)
+                    {
+                        <div class="mb-2">
+                            <label class="form-label small">Hasta (fecha fin)</label>
+                            <input class="form-control" type="date" @bind="_nuevo.FechaFin" />
+                        </div>
+                    }
                     <div class="mb-2">
                         <label class="form-label small">Categoría</label>
                         <select class="form-select" @bind="_nuevo.CategoriaId">
@@ -175,6 +182,12 @@
     private MovimientoRecurrente _nuevo = new();
     private string? _errorCarga;
     private string? _errorGuardar;
+
+    private bool SinFechaFin
+    {
+        get => _nuevo.FechaFin is null;
+        set => _nuevo.FechaFin = value ? null : DateTime.Today.AddYears(1);
+    }
 
     protected override async Task OnInitializedAsync()
     {
