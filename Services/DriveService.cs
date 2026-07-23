@@ -253,10 +253,9 @@ public class DriveService(IJSRuntime js, HttpClient http)
             }
             else
             {
-                _token = null;
-                try { await js.InvokeVoidAsync("storage.remove", TokenKey); } catch { }
+                NecesitaReconectar = true;
                 OnEstadoCambiado?.Invoke();
-                throw new Exception("Token de Google expirado. Reconéctate en Ajustes.");
+                throw new Exception("Token de Google expirado. Reconéctate.");
             }
         }
 
