@@ -12,7 +12,7 @@ public class MovimientoRecurrente
     public int DiaDelMes { get; set; } = 1;
     public DayOfWeek DiaDeSemana { get; set; } = DayOfWeek.Monday;
     public DateTime FechaInicio { get; set; } = DateTime.Today;
-    public DateTime FechaFin { get; set; } = DateTime.Today.AddYears(1);
+    public DateTime? FechaFin { get; set; } = DateTime.Today.AddYears(1);
     public string CategoriaId { get; set; } = "";
     public string CuentaId { get; set; } = "";
     public bool Activo { get; set; } = true;
@@ -23,5 +23,5 @@ public class MovimientoRecurrente
     public bool EstaActivoEnMes(int mes, int anyo) =>
         Activo &&
         new DateTime(anyo, mes, 1) >= new DateTime(FechaInicio.Year, FechaInicio.Month, 1) &&
-        new DateTime(anyo, mes, 1) <= new DateTime(FechaFin.Year, FechaFin.Month, 1);
+        (FechaFin is null || new DateTime(anyo, mes, 1) <= new DateTime(FechaFin.Value.Year, FechaFin.Value.Month, 1));
 }
