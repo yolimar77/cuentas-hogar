@@ -183,8 +183,16 @@
             <div class="d-flex gap-1 mt-1">
                 @foreach (var m in _historial)
                 {
-                    <div class="flex-fill text-center" style="font-size:0.65rem;color:@(m.EsPositivo ? "#198754" : "#dc3545")">
-                        @(m.EsPositivo ? "+" : "")@m.Balance.ToString("N0")
+                    <div class="flex-fill text-center">
+                        <div style="font-size:0.65rem;color:@(m.EsPositivo ? "#198754" : "#dc3545")">
+                            @(m.EsPositivo ? "+" : "")@m.Balance.ToString("N0")
+                        </div>
+                        @if (m.BalanceAjustado is decimal ajustadoEtiqueta && ajustadoEtiqueta != m.Balance)
+                        {
+                            <div style="font-size:0.6rem;color:@(ajustadoEtiqueta >= 0 ? "#198754" : "#dc3545");opacity:0.7">
+                                (@(ajustadoEtiqueta >= 0 ? "+" : "")@ajustadoEtiqueta.ToString("N0"))
+                            </div>
+                        }
                     </div>
                 }
             </div>
