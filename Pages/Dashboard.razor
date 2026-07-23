@@ -4,6 +4,7 @@
 @using System.Globalization
 @inject LocalDbService Db
 @inject PrevisionService Prevision
+@inject ComparativaService Comparativa
 @inject SyncService Sync
 @inject DriveService Drive
 @inject NavigationManager Nav
@@ -184,6 +185,42 @@
 
     </div>
 
+    <!-- Lo más destacado -->
+    <div class="mt-4">
+        <h6 class="text-muted mb-2">Lo más destacado este mes</h6>
+        @if (_destacados.Count == 0)
+        {
+            <p class="text-muted small">Sin cambios destacables este mes.</p>
+        }
+        else
+        {
+            @foreach (var d in _destacados)
+            {
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small">@(d.EsAumento ? "🔺" : "🔻") @d.Icono @d.Nombre</span>
+                    <span class="small text-end">
+                        <span class="fw-bold">@d.TotalActual.ToString("C")</span>
+                        @if (d.DiferenciaPorcentaje is null)
+                        {
+                            <span class="text-muted"> · nuevo gasto este mes</span>
+                        }
+                        else if (d.TotalActual == 0)
+                        {
+                            <span class="text-muted"> · sin gasto este mes (antes ~@d.MediaAnterior.ToString("C")/mes)</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">
+                                · @(d.EsAumento ? "+" : "")@d.DiferenciaImporte.ToString("C")
+                                · @(d.EsAumento ? "+" : "")@d.DiferenciaPorcentaje.Value.ToString("F0")% vs. media
+                            </span>
+                        }
+                    </span>
+                </div>
+            }
+        }
+    </div>
+
     <!-- Ver todos -->
     <div class="text-end mt-3">
         <a href="movimientos" class="small">Ver todos los movimientos →</a>
@@ -209,6 +246,7 @@
 
     private List<MesBalance> _historial = [];
     private List<GastoCategoria> _gastosPorCategoria = [];
+    private List<CategoriaDestacada> _destacados = [];
     private decimal _maxBalance = 1;
 
     protected override async Task OnInitializedAsync()
@@ -286,6 +324,8 @@
             })
             .OrderByDescending(g => g.Total)
             .ToList();
+
+        _destacados = await Comparativa.ObtenerDestacadosAsync(_mesVista, _anyoVista);
     }
 
     private async Task MesAnterior()
