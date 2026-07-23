@@ -27,7 +27,6 @@ public class ComparativaService(LocalDbService db)
             if (inicioMesAnterior < inicioPrimerMes) break;
             mesesDisponibles++;
         }
-        if (mesesDisponibles == 0) return [];
 
         var gastosMesActual = movimientos
             .Where(m => m.Tipo == TipoMovimiento.Gasto && m.Fecha.Month == mes && m.Fecha.Year == anyo)
@@ -52,7 +51,7 @@ public class ComparativaService(LocalDbService db)
 
             var totalActual = gastosMesActual.Where(m => m.CategoriaId == categoriaId).Sum(m => m.Importe);
             var totalAnterior = gastosAnteriores.Where(m => m.CategoriaId == categoriaId).Sum(m => m.Importe);
-            var mediaAnterior = totalAnterior / mesesDisponibles;
+            var mediaAnterior = mesesDisponibles > 0 ? totalAnterior / mesesDisponibles : 0m;
 
             var diferenciaImporte = totalActual - mediaAnterior;
             decimal? diferenciaPorcentaje = mediaAnterior > 0
