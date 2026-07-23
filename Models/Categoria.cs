@@ -6,5 +6,6 @@ public class Categoria
     public string Nombre { get; set; } = "";
     public TipoMovimiento Tipo { get; set; }
     public string Icono { get; set; } = "💰";
+    public decimal? MinimoMensual { get; set; }
     public DateTime ModificadoEn { get; set; } = DateTime.UtcNow;
 }
