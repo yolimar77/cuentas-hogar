@@ -22,7 +22,8 @@
         else if (!Drive.Conectado)
         {
             <i class="ph-bold ph-cloud-slash" style="color:#fd7e14;font-size:1rem"></i>
-            <a href="configuracion" class="text-decoration-none" style="color:#fd7e14">Sin conexión a Drive · Ir a Ajustes</a>
+            <span style="color:#fd7e14">Sin conexión a Drive</span>
+            <a href="configuracion" class="btn btn-sm btn-warning">Ir a Ajustes</a>
         }
         else if (Sync.UltimoError is not null)
         {
