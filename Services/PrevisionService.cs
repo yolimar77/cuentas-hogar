@@ -8,11 +8,30 @@ public class PrevisionService(LocalDbService db)
     {
         var movimientos = await db.ObtenerMovimientosAsync();
         var recurrentes = await db.ObtenerRecurrentesAsync();
+        var categorias  = await db.ObtenerCategoriasAsync();
 
         var inicioMes     = new DateTime(anyo, mes, 1);
         var movMes        = movimientos.Where(m => m.Fecha.Month == mes && m.Fecha.Year == anyo);
         var movAnteriores = movimientos.Where(m => m.Fecha < inicioMes);
         var recActivosMes = recurrentes.Where(r => r.EstaActivoEnMes(mes, anyo));
+
+        // Agrupar por nombre resuelto para que categorías duplicadas (mismo nombre,
+        // distinto Id, herencia de creación en dos dispositivos antes de sincronizar)
+        // compartan un único mínimo y una única suma de gasto real.
+        var detalleMinimos = new List<MinimoCategoria>();
+        foreach (var grupo in categorias.Where(c => c.Tipo == TipoMovimiento.Gasto).GroupBy(c => c.Nombre))
+        {
+            var minimo = grupo.Select(c => c.MinimoMensual).FirstOrDefault(m => m is > 0);
+            if (minimo is null) continue;
+
+            var idsDelGrupo = grupo.Select(c => c.Id).ToHashSet();
+            var gastoReal = movMes
+                .Where(m => m.Tipo == TipoMovimiento.Gasto && idsDelGrupo.Contains(m.CategoriaId))
+                .Sum(m => m.Importe);
+
+            var icono = grupo.Select(c => c.Icono).FirstOrDefault() ?? "•";
+            detalleMinimos.Add(new MinimoCategoria(grupo.Key, icono, gastoReal, minimo.Value));
+        }
 
         return new PrevisionMensual
         {
@@ -30,6 +49,7 @@ public class PrevisionService(LocalDbService db)
             GastosReales = movMes
                 .Where(m => m.Tipo == TipoMovimiento.Gasto)
                 .Sum(m => m.Importe),
+            DetalleMinimos = detalleMinimos,
             SaldoAcumulado =
                 movAnteriores.Where(m => m.Tipo == TipoMovimiento.Ingreso).Sum(m => m.Importe) -
                 movAnteriores.Where(m => m.Tipo == TipoMovimiento.Gasto).Sum(m => m.Importe),
