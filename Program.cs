@@ -11,6 +11,7 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 
 builder.Services.AddScoped<LocalDbService>();
 builder.Services.AddScoped<PrevisionService>();
+builder.Services.AddScoped<ComparativaService>();
 builder.Services.AddScoped<DriveService>();
 builder.Services.AddScoped<SyncService>();
 
