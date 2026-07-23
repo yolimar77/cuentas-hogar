@@ -1,14 +1,33 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Nav
 @inject DriveService Drive
+@inject SyncService Sync
+@inject RecurrenteAvisoService Avisos
 @implements IDisposable
 @using HomeAccounts.Services
+@using HomeAccounts.Models
 
 @if (Drive.NecesitaReconectar)
 {
     <div class="bg-warning text-dark px-3 py-2 d-flex flex-wrap justify-content-between align-items-center gap-2" style="font-size:0.85rem">
         <span><i class="ph-bold ph-warning"></i> Permisos de Google actualizados</span>
         <a href="configuracion" class="btn btn-sm btn-dark flex-shrink-0">Reconectar</a>
+    </div>
+}
+
+@if (_recurrentesPorVencer.Count > 0)
+{
+    <div class="bg-warning text-dark px-3 py-2" style="font-size:0.85rem">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span><i class="ph-bold ph-warning"></i> Pagos recurrentes a punto de vencer:</span>
+            <a href="recurrentes" class="btn btn-sm btn-dark flex-shrink-0">Revisar</a>
+        </div>
+        <ul class="mb-0 mt-1 ps-3">
+            @foreach (var r in _recurrentesPorVencer)
+            {
+                <li>@r.Concepto · @TextoVencimiento(r.DiasRestantes)</li>
+            }
+        </ul>
     </div>
 }
 
@@ -34,12 +53,40 @@
 </nav>
 
 @code {
-    protected override void OnInitialized() =>
+    private List<RecurrenteVencimiento> _recurrentesPorVencer = [];
+
+    protected override async Task OnInitializedAsync()
+    {
         Drive.OnEstadoCambiado += OnDriveCambiado;
+        Sync.OnSyncCompletado += OnSyncCompletado;
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        _recurrentesPorVencer = await Avisos.ObtenerPorVencerAsync();
+    }
+
+    private async Task OnSyncCompletado()
+    {
+        await Cargar();
+        await InvokeAsync(StateHasChanged);
+    }
 
     private void OnDriveCambiado() => InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Drive.OnEstadoCambiado -= OnDriveCambiado;
+    public void Dispose()
+    {
+        Drive.OnEstadoCambiado -= OnDriveCambiado;
+        Sync.OnSyncCompletado -= OnSyncCompletado;
+    }
+
+    private static string TextoVencimiento(int dias) => dias switch
+    {
+        0 => "vence hoy",
+        1 => "vence mañana",
+        _ => $"vence en {dias} días"
+    };
 
     private bool EsRuta(string ruta)
     {
