@@ -37,20 +37,27 @@ public class ComparativaService(LocalDbService db)
             .Where(m => m.Tipo == TipoMovimiento.Gasto && m.Fecha >= inicioVentana && m.Fecha < inicioMesVisto)
             .ToList();
 
-        var categoriaIds = gastosMesActual.Select(m => m.CategoriaId)
-            .Union(gastosAnteriores.Select(m => m.CategoriaId))
+        // Agrupar por nombre resuelto para que IDs duplicados con el mismo nombre
+        // (herencia de la inicialización multi-dispositivo anterior) queden en un único grupo
+        string NombreDe(Movimiento m) => catById.TryGetValue(m.CategoriaId, out var c) ? c.Nombre : "Sin categoría";
+
+        var nombresCategorias = gastosMesActual.Select(NombreDe)
+            .Union(gastosAnteriores.Select(NombreDe))
             .Distinct();
 
         var resultado = new List<CategoriaDestacada>();
 
-        foreach (var categoriaId in categoriaIds)
+        foreach (var nombre in nombresCategorias)
         {
-            catById.TryGetValue(categoriaId, out var categoria);
-            var nombre = categoria?.Nombre ?? "Sin categoría";
-            var icono = categoria?.Icono ?? "•";
+            var movimientosActual = gastosMesActual.Where(m => NombreDe(m) == nombre).ToList();
+            var movimientosAnterior = gastosAnteriores.Where(m => NombreDe(m) == nombre).ToList();
 
-            var totalActual = gastosMesActual.Where(m => m.CategoriaId == categoriaId).Sum(m => m.Importe);
-            var totalAnterior = gastosAnteriores.Where(m => m.CategoriaId == categoriaId).Sum(m => m.Importe);
+            var icono = movimientosActual.Concat(movimientosAnterior)
+                .Select(m => catById.TryGetValue(m.CategoriaId, out var c) ? c.Icono : null)
+                .FirstOrDefault(i => i != null) ?? "•";
+
+            var totalActual = movimientosActual.Sum(m => m.Importe);
+            var totalAnterior = movimientosAnterior.Sum(m => m.Importe);
             var mediaAnterior = mesesDisponibles > 0 ? totalAnterior / mesesDisponibles : 0m;
 
             var diferenciaImporte = totalActual - mediaAnterior;
