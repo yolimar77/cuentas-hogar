@@ -62,7 +62,7 @@ public class PrevisionService(LocalDbService db)
         var primerDia  = new DateTime(anyo, mes, 1);
         var ultimoDia  = new DateTime(anyo, mes, DateTime.DaysInMonth(anyo, mes));
         var desde      = primerDia > rec.FechaInicio ? primerDia : rec.FechaInicio;
-        var hasta      = ultimoDia < rec.FechaFin    ? ultimoDia : rec.FechaFin;
+        var hasta      = rec.FechaFin is null || ultimoDia < rec.FechaFin.Value ? ultimoDia : rec.FechaFin.Value;
         if (desde > hasta) return 0;
         var cursor = desde;
         while (cursor.DayOfWeek != rec.DiaDeSemana) cursor = cursor.AddDays(1);
@@ -81,7 +81,9 @@ public class PrevisionService(LocalDbService db)
 
         foreach (var rec in recurrentes.Where(r => r.Activo))
         {
-            var limite = new DateTime(Math.Min(finHorizonte.Ticks, rec.FechaFin.Ticks));
+            var limite = rec.FechaFin is null || finHorizonte <= rec.FechaFin.Value
+                ? finHorizonte
+                : rec.FechaFin.Value;
 
             if (rec.Frecuencia == Models.Frecuencia.Semanal)
             {
