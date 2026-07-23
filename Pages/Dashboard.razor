@@ -133,12 +133,12 @@
                 <div class="mb-2">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="small">@d.Icono @d.Nombre</span>
-                        <span class="small @(d.Alcanzado ? "text-success" : "text-muted")">
+                        <span class="small @(d.Alcanzado ? "text-warning" : "text-success")">
                             @d.GastoReal.ToString("C") / @d.Minimo.ToString("C")
                         </span>
                     </div>
                     <div class="progress" style="height:5px">
-                        <div class="progress-bar @(d.Alcanzado ? "bg-success" : "bg-warning")"
+                        <div class="progress-bar @(d.Alcanzado ? "bg-warning" : "bg-success")"
                              style="width:@(Math.Min(d.Minimo > 0 ? d.GastoReal / d.Minimo * 100 : 100, 100).ToString("F1", CultureInfo.InvariantCulture))%"></div>
                     </div>
                 </div>
