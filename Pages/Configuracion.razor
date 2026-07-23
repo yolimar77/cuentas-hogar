@@ -164,7 +164,16 @@
                         </div>
                     </div>
                     <input class="form-control mb-2" @bind="_nuevaCategoria.Nombre" @bind:event="oninput" placeholder="Nombre" />
-                    <input class="form-control" @bind="_nuevaCategoria.Icono" placeholder="Emoji (ej: 🛒)" />
+                    <input class="form-control mb-2" @bind="_nuevaCategoria.Icono" placeholder="Emoji (ej: 🛒)" />
+                    @if (_nuevaCategoria.Tipo == TipoMovimiento.Gasto)
+                    {
+                        <div class="mb-2">
+                            <label class="form-label small">Mínimo mensual (€) <span class="text-muted">(opcional)</span></label>
+                            <input class="form-control" type="number" step="0.01" min="0"
+                                   value="@_nuevaCategoria.MinimoMensual"
+                                   @onchange="@(e => _nuevaCategoria.MinimoMensual = decimal.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : null)" />
+                        </div>
+                    }
                     @if (_errorCategoria is not null)
                     {
                         <p class="text-danger small mt-2 mb-0">@_errorCategoria</p>
