@@ -100,6 +100,8 @@
                                     @onclick="() => _nuevo.Frecuencia = Frecuencia.Mensual">Mensual</button>
                             <button class="btn @(_nuevo.Frecuencia == Frecuencia.Semanal ? "btn-primary" : "btn-outline-primary")"
                                     @onclick="() => _nuevo.Frecuencia = Frecuencia.Semanal">Semanal</button>
+                            <button class="btn @(_nuevo.Frecuencia == Frecuencia.Anual ? "btn-primary" : "btn-outline-primary")"
+                                    @onclick="() => _nuevo.Frecuencia = Frecuencia.Anual">Anual</button>
                         </div>
                     </div>
                     @if (_nuevo.Frecuencia == Frecuencia.Mensual)
@@ -109,7 +111,7 @@
                             <input class="form-control" type="number" min="1" max="31" @bind="_nuevo.DiaDelMes" />
                         </div>
                     }
-                    else
+                    else if (_nuevo.Frecuencia == Frecuencia.Semanal)
                     {
                         <div class="mb-2">
                             <label class="form-label small">Día de la semana</label>
@@ -123,6 +125,10 @@
                                 <option value="0">Domingo</option>
                             </select>
                         </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted small mb-2">El día y mes de "Desde" se repiten cada año.</p>
                     }
                     <div class="mb-2">
                         <label class="form-label small">Desde</label>
@@ -303,10 +309,19 @@
 
     private void Cerrar() { _mostrarFormulario = false; _esEdicion = false; _errorGuardar = null; }
 
-    private static string DescripcionFrecuencia(MovimientoRecurrente rec) =>
-        rec.Frecuencia == Frecuencia.Semanal
-            ? $"Cada {NombreDia(rec.DiaDeSemana)}"
-            : $"Día {rec.DiaDelMes}";
+    private static string DescripcionFrecuencia(MovimientoRecurrente rec) => rec.Frecuencia switch
+    {
+        Frecuencia.Semanal => $"Cada {NombreDia(rec.DiaDeSemana)}",
+        Frecuencia.Anual   => $"Cada {rec.FechaInicio.Day} de {NombreMes(rec.FechaInicio.Month)}",
+        _                  => $"Día {rec.DiaDelMes}"
+    };
+
+    private static string NombreMes(int m) => m switch
+    {
+        1 => "enero", 2 => "febrero", 3 => "marzo", 4 => "abril",
+        5 => "mayo", 6 => "junio", 7 => "julio", 8 => "agosto",
+        9 => "septiembre", 10 => "octubre", 11 => "noviembre", _ => "diciembre"
+    };
 
     private static string NombreDia(DayOfWeek d) => d switch
     {
