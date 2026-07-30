@@ -109,6 +109,30 @@ public class PrevisionService(LocalDbService db)
                     cursor = cursor.AddDays(7);
                 }
             }
+            else if (rec.Frecuencia == Models.Frecuencia.Anual)
+            {
+                var anyo = rec.FechaInicio.Year;
+                while (new DateTime(anyo, rec.FechaInicio.Month, 1) <= limite)
+                {
+                    var periodo = $"{anyo:0000}-{rec.FechaInicio.Month:00}";
+                    if (!await db.ExisteMovimientoRecurrenteAsync(rec.Id, periodo))
+                    {
+                        var dia = Math.Min(rec.FechaInicio.Day, DateTime.DaysInMonth(anyo, rec.FechaInicio.Month));
+                        await db.GuardarMovimientoAsync(new Movimiento
+                        {
+                            Concepto     = rec.Concepto,
+                            Importe      = rec.Importe,
+                            Tipo         = rec.Tipo,
+                            Fecha        = new DateTime(anyo, rec.FechaInicio.Month, dia),
+                            CategoriaId  = rec.CategoriaId,
+                            CuentaId     = rec.CuentaId,
+                            RecurrenteId = rec.Id,
+                            Periodo      = periodo
+                        });
+                    }
+                    anyo++;
+                }
+            }
             else
             {
                 var fecha = new DateTime(rec.FechaInicio.Year, rec.FechaInicio.Month, 1);
