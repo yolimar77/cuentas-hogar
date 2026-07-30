@@ -1,6 +1,6 @@
 namespace HomeAccounts.Models;
 
-public enum Frecuencia { Mensual, Semanal }
+public enum Frecuencia { Mensual, Semanal, Anual }
 
 public class MovimientoRecurrente
 {
@@ -22,6 +22,7 @@ public class MovimientoRecurrente
 
     public bool EstaActivoEnMes(int mes, int anyo) =>
         Activo &&
+        (Frecuencia != Frecuencia.Anual || mes == FechaInicio.Month) &&
         new DateTime(anyo, mes, 1) >= new DateTime(FechaInicio.Year, FechaInicio.Month, 1) &&
         (FechaFin is null || new DateTime(anyo, mes, 1) <= new DateTime(FechaFin.Value.Year, FechaFin.Value.Month, 1));
 }
