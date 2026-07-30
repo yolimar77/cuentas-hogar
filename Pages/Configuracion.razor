@@ -14,7 +14,7 @@
     <div class="card mb-3">
         <div class="card-body">
             <h6 class="card-title">Google Drive</h6>
-            @if (Drive.Conectado)
+            @if (Drive.Conectado && !Drive.NecesitaReconectar)
             {
                 <p class="text-success small mb-1">✅ Conectado con Google Drive</p>
                 <p class="text-muted small mb-2">
@@ -37,7 +37,11 @@
             }
             else
             {
-                <p class="text-muted small mb-2">No conectado. Conéctate para sincronizar entre dispositivos.</p>
+                <p class="text-muted small mb-2">
+                    @(Drive.NecesitaReconectar
+                        ? "Tu sesión de Google ha caducado. Reconéctate para seguir sincronizando."
+                        : "No conectado. Conéctate para sincronizar entre dispositivos.")
+                </p>
                 <button class="btn btn-outline-primary btn-sm" @onclick="Conectar">Conectar con Google</button>
             }
         </div>
