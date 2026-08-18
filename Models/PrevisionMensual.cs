@@ -26,6 +26,9 @@ public class PrevisionMensual
     // Diferencia no cubierta por el gasto real en categorías con mínimo (0 si ya lo alcanzaron)
     public decimal GastosMinimoAjuste => DetalleMinimos.Sum(d => Math.Max(0, d.Minimo - d.GastoReal));
 
+    // Balance real del mes sin restar la previsión pendiente de los mínimos
+    public decimal BalanceSinAjuste => IngresosReales - GastosReales;
+
     // Balance del mes en curso (sin acumulado)
     public decimal Margen => IngresosReales - GastosReales - GastosMinimoAjuste;
 

@@ -112,6 +112,21 @@
                                 @(_prevision.Margen >= 0 ? "+" : "")@_prevision.Margen.ToString("C")
                             </div>
                         </div>
+                        @if (_prevision.GastosMinimoAjuste != 0)
+                        {
+                            <div class="d-flex justify-content-between align-items-center" style="font-size:0.72rem">
+                                <div class="text-muted ps-4">│  ├─ Disponible (sin lo reservado)</div>
+                                <div class="@(_prevision.BalanceSinAjuste >= 0 ? "text-success" : "text-danger")">
+                                    @(_prevision.BalanceSinAjuste >= 0 ? "+" : "")@_prevision.BalanceSinAjuste.ToString("C")
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center" style="font-size:0.72rem">
+                                <div class="text-muted ps-4">│  └─ Previsión pendiente (sin gastar)</div>
+                                <div class="text-danger">
+                                    -@_prevision.GastosMinimoAjuste.ToString("C")
+                                </div>
+                            </div>
+                        }
                         <div class="d-flex justify-content-between align-items-center" style="font-size:0.8rem">
                             <div class="text-muted ps-2">└─ Acumulado anterior</div>
                             <div class="@(_prevision.SaldoAcumulado >= 0 ? "text-success" : "text-danger")">
