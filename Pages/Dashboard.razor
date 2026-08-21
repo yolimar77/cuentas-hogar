@@ -114,16 +114,21 @@
                         </div>
                         @if (_prevision.GastosMinimoAjuste != 0)
                         {
-                            <div class="d-flex justify-content-between align-items-center" style="font-size:0.72rem">
-                                <div class="text-muted ps-2">│&nbsp;&nbsp;├─ Disponible (sin lo reservado)</div>
-                                <div class="@(_prevision.BalanceSinAjuste >= 0 ? "text-success" : "text-danger")">
-                                    @(_prevision.BalanceSinAjuste >= 0 ? "+" : "")@_prevision.BalanceSinAjuste.ToString("C")
-                                </div>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center" style="font-size:0.72rem">
-                                <div class="text-muted ps-2">│&nbsp;&nbsp;└─ Previsión pendiente (sin gastar)</div>
-                                <div class="text-danger">
-                                    -@_prevision.GastosMinimoAjuste.ToString("C")
+                            <div class="d-flex" style="margin-left:0.62rem">
+                                <div style="width:1px;background:#adb5bd;margin:0.15rem 0.5rem 0.15rem 0"></div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-center" style="font-size:0.72rem">
+                                        <div class="text-muted">├─ Disponible (sin lo reservado)</div>
+                                        <div class="@(_prevision.BalanceSinAjuste >= 0 ? "text-success" : "text-danger")">
+                                            @(_prevision.BalanceSinAjuste >= 0 ? "+" : "")@_prevision.BalanceSinAjuste.ToString("C")
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center" style="font-size:0.72rem">
+                                        <div class="text-muted">└─ Previsión pendiente (sin gastar)</div>
+                                        <div class="text-danger">
+                                            -@_prevision.GastosMinimoAjuste.ToString("C")
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         }
