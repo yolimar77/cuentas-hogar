@@ -28,6 +28,35 @@ a, .btn-link {
     outline: 1px solid #26b050;
 }
 
+.balance-tree {
+    position: relative;
+    padding-left: 0.9rem;
+}
+
+.balance-tree::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.6rem;
+    bottom: 0.6rem;
+    width: 1px;
+    background: #adb5bd;
+}
+
+.balance-tree-item {
+    position: relative;
+}
+
+.balance-tree-item::before {
+    content: "";
+    position: absolute;
+    left: -0.9rem;
+    top: 50%;
+    width: 0.7rem;
+    height: 1px;
+    background: #adb5bd;
+}
+
 .invalid {
     outline: 1px solid red;
 }

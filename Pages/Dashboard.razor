@@ -106,35 +106,34 @@
                                 @(_prevision.SaldoTotal >= 0 ? "+" : "")@_prevision.SaldoTotal.ToString("C")
                             </div>
                         </div>
-                        <div class="d-flex mt-1" style="margin-left:0.5rem">
-                            <div style="width:1px;background:#adb5bd;margin:0.6rem 0.5rem 0.6rem 0"></div>
-                            <div class="flex-grow-1">
-                                <div class="d-flex justify-content-between align-items-center" style="font-size:0.8rem">
-                                    <div class="text-muted">Este mes</div>
-                                    <div class="@(_prevision.Margen >= 0 ? "text-success" : "text-danger")">
-                                        @(_prevision.Margen >= 0 ? "+" : "")@_prevision.Margen.ToString("C")
-                                    </div>
+                        <div class="balance-tree mt-1 ms-2">
+                            <div class="balance-tree-item d-flex justify-content-between align-items-center" style="font-size:0.8rem">
+                                <div class="text-muted">Este mes</div>
+                                <div class="@(_prevision.Margen >= 0 ? "text-success" : "text-danger")">
+                                    @(_prevision.Margen >= 0 ? "+" : "")@_prevision.Margen.ToString("C")
                                 </div>
-                                @if (_prevision.GastosMinimoAjuste != 0)
-                                {
-                                    <div class="d-flex justify-content-between align-items-center ps-3" style="font-size:0.72rem">
+                            </div>
+                            @if (_prevision.GastosMinimoAjuste != 0)
+                            {
+                                <div class="balance-tree ms-2">
+                                    <div class="balance-tree-item d-flex justify-content-between align-items-center" style="font-size:0.72rem">
                                         <div class="text-muted">Disponible (sin lo reservado)</div>
                                         <div class="@(_prevision.BalanceSinAjuste >= 0 ? "text-success" : "text-danger")">
                                             @(_prevision.BalanceSinAjuste >= 0 ? "+" : "")@_prevision.BalanceSinAjuste.ToString("C")
                                         </div>
                                     </div>
-                                    <div class="d-flex justify-content-between align-items-center ps-3" style="font-size:0.72rem">
+                                    <div class="balance-tree-item d-flex justify-content-between align-items-center" style="font-size:0.72rem">
                                         <div class="text-muted">Previsión pendiente (sin gastar)</div>
                                         <div class="text-danger">
                                             -@_prevision.GastosMinimoAjuste.ToString("C")
                                         </div>
                                     </div>
-                                }
-                                <div class="d-flex justify-content-between align-items-center" style="font-size:0.8rem">
-                                    <div class="text-muted">Acumulado anterior</div>
-                                    <div class="@(_prevision.SaldoAcumulado >= 0 ? "text-success" : "text-danger")">
-                                        @(_prevision.SaldoAcumulado >= 0 ? "+" : "")@_prevision.SaldoAcumulado.ToString("C")
-                                    </div>
+                                </div>
+                            }
+                            <div class="balance-tree-item d-flex justify-content-between align-items-center" style="font-size:0.8rem">
+                                <div class="text-muted">Acumulado anterior</div>
+                                <div class="@(_prevision.SaldoAcumulado >= 0 ? "text-success" : "text-danger")">
+                                    @(_prevision.SaldoAcumulado >= 0 ? "+" : "")@_prevision.SaldoAcumulado.ToString("C")
                                 </div>
                             </div>
                         </div>
