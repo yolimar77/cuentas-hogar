@@ -444,7 +444,7 @@
 
     private string AlertMensaje() => _prevision?.Nivel switch
     {
-        NivelAlerta.Aviso   => "Atención: superas el 80% de tus ingresos previstos",
+        NivelAlerta.Aviso   => "Atención: superas el 80% de tus ingresos",
         NivelAlerta.Peligro => $"Los gastos superan los ingresos en {Math.Abs(_prevision.BalanceSinAjuste):C}",
         _                   => "Margen disponible este mes"
     };
