@@ -246,10 +246,17 @@
         {
             @foreach (var d in _destacados)
             {
+                var hayDireccion = d.DiferenciaPorcentaje is not null && d.TotalActual != 0;
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span class="small">@d.Icono @d.Nombre</span>
-                        <span class="small fw-bold">@d.TotalActual.ToString("C")</span>
+                        <span class="small fw-bold @(hayDireccion ? (d.EsAumento ? "text-danger" : "text-success") : "")">
+                            @if (hayDireccion)
+                            {
+                                @(d.EsAumento ? "▲" : "▼")<text> </text>
+                            }
+                            @d.TotalActual.ToString("C")
+                        </span>
                     </div>
                     <div style="font-size:0.78rem">
                         @if (d.DiferenciaPorcentaje is null)
@@ -263,7 +270,7 @@
                         else
                         {
                             <span class="@(d.EsAumento ? "text-danger" : "text-success")">
-                                @(d.EsAumento ? "▲" : "▼") @Math.Abs(d.DiferenciaImporte).ToString("C") @(d.EsAumento ? "más" : "menos") de lo habitual
+                                @Math.Abs(d.DiferenciaImporte).ToString("C") @(d.EsAumento ? "más" : "menos") de lo habitual
                                 (@(d.EsAumento ? "+" : "")@d.DiferenciaPorcentaje.Value.ToString("F0")%)
                             </span>
                         }
