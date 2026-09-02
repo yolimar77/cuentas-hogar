@@ -95,41 +95,24 @@
                 </div>
             </div>
         </div>
-        @if (_prevision is not null && (_prevision.SaldoAcumulado != 0 || _prevision.Margen != 0))
+        @if (_prevision is not null && (_prevision.SaldoAcumulado != 0 || _prevision.BalanceSinAjuste != 0))
         {
             <div class="col-12">
                 <div class="card">
                     <div class="card-body py-2">
                         <div class="d-flex justify-content-between align-items-center">
-                            <div class="small fw-semibold">Saldo total disponible</div>
-                            <div class="fw-bold @(_prevision.SaldoTotal >= 0 ? "text-success" : "text-danger")">
-                                @(_prevision.SaldoTotal >= 0 ? "+" : "")@_prevision.SaldoTotal.ToString("C")
+                            <div class="small fw-semibold">Saldo real disponible</div>
+                            <div class="fw-bold @(_prevision.SaldoRealDisponible >= 0 ? "text-success" : "text-danger")">
+                                @(_prevision.SaldoRealDisponible >= 0 ? "+" : "")@_prevision.SaldoRealDisponible.ToString("C")
                             </div>
                         </div>
                         <div class="balance-tree mt-1 ms-2">
                             <div class="balance-tree-item d-flex justify-content-between align-items-center" style="font-size:0.8rem">
                                 <div class="text-muted">Este mes</div>
-                                <div class="@(_prevision.Margen >= 0 ? "text-success" : "text-danger")">
-                                    @(_prevision.Margen >= 0 ? "+" : "")@_prevision.Margen.ToString("C")
+                                <div class="@(_prevision.BalanceSinAjuste >= 0 ? "text-success" : "text-danger")">
+                                    @(_prevision.BalanceSinAjuste >= 0 ? "+" : "")@_prevision.BalanceSinAjuste.ToString("C")
                                 </div>
                             </div>
-                            @if (_prevision.GastosMinimoAjuste != 0)
-                            {
-                                <div class="balance-tree ms-2">
-                                    <div class="balance-tree-item d-flex justify-content-between align-items-center" style="font-size:0.72rem">
-                                        <div class="text-muted">Disponible (sin lo reservado)</div>
-                                        <div class="@(_prevision.BalanceSinAjuste >= 0 ? "text-success" : "text-danger")">
-                                            @(_prevision.BalanceSinAjuste >= 0 ? "+" : "")@_prevision.BalanceSinAjuste.ToString("C")
-                                        </div>
-                                    </div>
-                                    <div class="balance-tree-item d-flex justify-content-between align-items-center" style="font-size:0.72rem">
-                                        <div class="text-muted">Previsión pendiente (sin gastar)</div>
-                                        <div class="text-danger">
-                                            -@_prevision.GastosMinimoAjuste.ToString("C")
-                                        </div>
-                                    </div>
-                                </div>
-                            }
                             <div class="balance-tree-item d-flex justify-content-between align-items-center" style="font-size:0.8rem">
                                 <div class="text-muted">Acumulado anterior</div>
                                 <div class="@(_prevision.SaldoAcumulado >= 0 ? "text-success" : "text-danger")">
@@ -137,6 +120,13 @@
                                 </div>
                             </div>
                         </div>
+                        @if (_prevision.GastosMinimoAjuste != 0)
+                        {
+                            <div class="text-muted mt-2" style="font-size:0.75rem">
+                                ⚠ Si completas los @_prevision.GastosMinimoAjuste.ToString("C") que aún te faltan de @_prevision.NombresPendientes,
+                                el saldo real disponible (@_prevision.SaldoRealDisponible.ToString("C")) bajaría a @_prevision.SaldoTotal.ToString("C") en total
+                            </div>
+                        }
                     </div>
                 </div>
             </div>

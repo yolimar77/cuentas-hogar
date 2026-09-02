@@ -35,6 +35,26 @@ public class PrevisionMensual
     // Saldo total = margen del mes + lo acumulado de meses anteriores
     public decimal SaldoTotal => Margen + SaldoAcumulado;
 
+    // Dinero real disponible ahora mismo: lo que ha sobrado este mes (sin restar
+    // la previsión pendiente) más lo acumulado de meses anteriores
+    public decimal SaldoRealDisponible => BalanceSinAjuste + SaldoAcumulado;
+
+    // Nombres de las categorías que aún no han alcanzado su mínimo mensual,
+    // para el aviso de previsión pendiente ("Alimentación y Transporte")
+    public string NombresPendientes
+    {
+        get
+        {
+            var nombres = DetalleMinimos.Where(d => !d.Alcanzado).Select(d => d.Nombre).ToList();
+            return nombres.Count switch
+            {
+                0 => "",
+                1 => nombres[0],
+                _ => string.Join(", ", nombres.Take(nombres.Count - 1)) + " y " + nombres[^1]
+            };
+        }
+    }
+
     public decimal PorcentajeGasto => IngresosReales == 0
         ? (GastosReales == 0 ? 0 : 100)
         : Math.Round(GastosReales / IngresosReales * 100, 1);
