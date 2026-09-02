@@ -246,26 +246,28 @@
         {
             @foreach (var d in _destacados)
             {
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="small">@(d.EsAumento ? "🔺" : "🔻") @d.Icono @d.Nombre</span>
-                    <span class="small text-end">
-                        <span class="fw-bold">@d.TotalActual.ToString("C")</span>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="small">@d.Icono @d.Nombre</span>
+                        <span class="small fw-bold">@d.TotalActual.ToString("C")</span>
+                    </div>
+                    <div style="font-size:0.78rem">
                         @if (d.DiferenciaPorcentaje is null)
                         {
-                            <span class="text-muted"> · nuevo gasto este mes</span>
+                            <span class="text-muted">Gasto nuevo este mes</span>
                         }
                         else if (d.TotalActual == 0)
                         {
-                            <span class="text-muted"> · sin gasto este mes (antes ~@d.MediaAnterior.ToString("C")/mes)</span>
+                            <span class="text-muted">Sin gasto este mes (antes ~@d.MediaAnterior.ToString("C")/mes)</span>
                         }
                         else
                         {
-                            <span class="text-muted">
-                                · @(d.EsAumento ? "+" : "")@d.DiferenciaImporte.ToString("C")
-                                · @(d.EsAumento ? "+" : "")@d.DiferenciaPorcentaje.Value.ToString("F0")% vs. media
+                            <span class="@(d.EsAumento ? "text-danger" : "text-success")">
+                                @Math.Abs(d.DiferenciaImporte).ToString("C") @(d.EsAumento ? "más" : "menos") de lo habitual
+                                (@(d.EsAumento ? "+" : "")@d.DiferenciaPorcentaje.Value.ToString("F0")%)
                             </span>
                         }
-                    </span>
+                    </div>
                 </div>
             }
         }
