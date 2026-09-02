@@ -263,7 +263,7 @@
                         else
                         {
                             <span class="@(d.EsAumento ? "text-danger" : "text-success")">
-                                @Math.Abs(d.DiferenciaImporte).ToString("C") @(d.EsAumento ? "más" : "menos") de lo habitual
+                                @(d.EsAumento ? "▲" : "▼") @Math.Abs(d.DiferenciaImporte).ToString("C") @(d.EsAumento ? "más" : "menos") de lo habitual
                                 (@(d.EsAumento ? "+" : "")@d.DiferenciaPorcentaje.Value.ToString("F0")%)
                             </span>
                         }
