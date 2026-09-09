@@ -277,18 +277,32 @@
         {
             await Db.GuardarRecurrenteAsync(_nuevo);
 
-            // Al editar, borrar movimientos futuros generados para regenerarlos con la nueva configuración
-            // (necesario si cambia la frecuencia o el día). No se añaden tombstones porque son auto-generados.
             if (_esEdicion)
             {
-                var hoy   = DateTime.Today;
+                // Al editar, borrar los movimientos generados del mes en curso en adelante para
+                // regenerarlos con la nueva configuración (importe, frecuencia o día). Los meses
+                // anteriores conservan su importe real. No se añaden tombstones porque son auto-generados.
+                var corte = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
                 var todos = await Db.ObtenerMovimientosAsync();
-                var sinFuturos = todos.Where(m => !(m.RecurrenteId == _nuevo.Id && m.Fecha >= hoy)).ToList();
-                if (sinFuturos.Count != todos.Count)
-                    await Db.ReemplazarMovimientosAsync(sinFuturos);
+                var conservados = todos.Where(m => !(m.RecurrenteId == _nuevo.Id && m.Fecha >= corte)).ToList();
+                if (conservados.Count != todos.Count)
+                    await Db.ReemplazarMovimientosAsync(conservados);
+
+                await Prevision.GenerarMovimientosRecurrentesAsync();
+
+                // Sellar los regenerados como modificados ahora: en otro dispositivo aún existe la
+                // fila vieja de este periodo (sin tombstone) y el merge resuelve por ModificadoEn.
+                var regenerados = await Db.ObtenerMovimientosAsync();
+                var marca = DateTime.UtcNow;
+                foreach (var m in regenerados.Where(m => m.RecurrenteId == _nuevo.Id && m.Fecha >= corte))
+                    m.ModificadoEn = marca;
+                await Db.ReemplazarMovimientosAsync(regenerados);
+            }
+            else
+            {
+                await Prevision.GenerarMovimientosRecurrentesAsync();
             }
 
-            await Prevision.GenerarMovimientosRecurrentesAsync();
             await Sync.PropagateRecurrentesAsync();
             await Cargar();
             _mostrarFormulario = false;

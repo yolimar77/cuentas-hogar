@@ -131,13 +131,14 @@ public class SyncService(DriveService drive, LocalDbService db)
     }
 
     // Categoría y cuenta: se propagan siempre (son clasificaciones, no afectan al histórico).
-    // Importe y concepto: solo a movimientos con fecha >= hoy, para respetar el histórico real.
+    // Importe y concepto: solo del mes en curso en adelante, para respetar el histórico real
+    // de los meses ya cerrados.
     private async Task<int> PropagarcategoriasRecurrentesAsync()
     {
         var recurrentes = await db.ObtenerRecurrentesAsync();
         var movimientos = await db.ObtenerMovimientosAsync();
         var recById     = recurrentes.ToDictionary(r => r.Id);
-        var hoy         = DateTime.Today;
+        var inicioMes   = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
 
         bool cambio = false;
         foreach (var mov in movimientos.Where(m => m.RecurrenteId != null))
@@ -152,7 +153,7 @@ public class SyncService(DriveService drive, LocalDbService db)
                 cambio = true;
             }
 
-            if (mov.Fecha >= hoy && (mov.Importe != rec.Importe || mov.Concepto != rec.Concepto))
+            if (mov.Fecha >= inicioMes && (mov.Importe != rec.Importe || mov.Concepto != rec.Concepto))
             {
                 mov.Importe      = rec.Importe;
                 mov.Concepto     = rec.Concepto;
