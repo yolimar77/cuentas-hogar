@@ -332,6 +332,7 @@
 
     private async Task Cargar()
     {
+        await Prevision.ReconciliarMesAsync(_mesVista, _anyoVista);
         await Prevision.GenerarMovimientosRecurrentesAsync(_mesVista, _anyoVista);
         _prevision = await Prevision.CalcularAsync(_mesVista, _anyoVista);
 

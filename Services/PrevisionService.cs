@@ -159,4 +159,50 @@ public class PrevisionService(LocalDbService db)
             }
         }
     }
+
+    // Se llama al consultar un mes (actual o futuro) para que los movimientos generados
+    // reflejen la configuración vigente del recurrente, incluso si ese cambio llegó por
+    // sync desde otro dispositivo (MergeRecurrentesAsync no toca movimientos ya generados).
+    // Los meses ya pasados nunca se tocan.
+    public async Task ReconciliarMesAsync(int mes, int anyo)
+    {
+        var hoy = DateTime.Today;
+        if (new DateTime(anyo, mes, 1) < new DateTime(hoy.Year, hoy.Month, 1))
+            return;
+
+        var recurrentes = await db.ObtenerRecurrentesAsync();
+        var recById = recurrentes.ToDictionary(r => r.Id);
+        var todos = await db.ObtenerMovimientosAsync();
+
+        var obsoletos = todos
+            .Where(m => m.RecurrenteId != null && m.Fecha.Month == mes && m.Fecha.Year == anyo)
+            .Where(m => EsObsoleto(m, recById.GetValueOrDefault(m.RecurrenteId!), mes, anyo))
+            .Select(m => m.Id)
+            .ToHashSet();
+
+        if (obsoletos.Count > 0)
+            await db.ReemplazarMovimientosAsync(todos.Where(m => !obsoletos.Contains(m.Id)).ToList());
+    }
+
+    // Un movimiento generado deja de ser fiel a su recurrente si este ya no existe, ya no
+    // está activo ese mes (p.ej. FechaFin se acortó vía sync), o si Importe/Categoría/Cuenta/
+    // Tipo/Concepto/día difieren de la configuración vigente (cambio llegado por sync, sin
+    // pasar por la limpieza que ya hace Recurrentes.razor al editar localmente).
+    private static bool EsObsoleto(Movimiento m, MovimientoRecurrente? rec, int mes, int anyo)
+    {
+        if (rec is null || !rec.EstaActivoEnMes(mes, anyo))
+            return true;
+
+        if (m.Importe != rec.Importe || m.CategoriaId != rec.CategoriaId ||
+            m.CuentaId != rec.CuentaId || m.Tipo != rec.Tipo || m.Concepto != rec.Concepto)
+            return true;
+
+        if (rec.Frecuencia == Models.Frecuencia.Mensual)
+        {
+            var diaEsperado = Math.Min(rec.DiaDelMes, DateTime.DaysInMonth(anyo, mes));
+            if (m.Fecha.Day != diaEsperado) return true;
+        }
+
+        return false;
+    }
 }

@@ -185,6 +185,7 @@
 
     private async Task Cargar()
     {
+        await Prevision.ReconciliarMesAsync(_mesFiltro.Month, _mesFiltro.Year);
         await Prevision.GenerarMovimientosRecurrentesAsync(_mesFiltro.Month, _mesFiltro.Year);
         _prevision = await Prevision.CalcularAsync(_mesFiltro.Month, _mesFiltro.Year);
         var todos = await Db.ObtenerMovimientosAsync();
