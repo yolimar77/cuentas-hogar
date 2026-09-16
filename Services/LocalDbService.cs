@@ -26,12 +26,7 @@ public class LocalDbService(IJSRuntime js)
     public async Task<IDisposable> BloqueoAsync()
     {
         if (_bloqueoActivo.Value) return _bloqueoReentrante;
-        // DIAG temporal: si esto se queda colgado, la última línea "esperando semáforo" sin su
-        // "adquirido" emparejada en la consola dice que alguien más tiene el bloqueo y no lo suelta.
-        Console.WriteLine("[HA-diag] BloqueoAsync: esperando semáforo...");
-        var sw = System.Diagnostics.Stopwatch.StartNew();
         await _bloqueo.WaitAsync();
-        Console.WriteLine($"[HA-diag] BloqueoAsync: adquirido tras {sw.ElapsedMilliseconds} ms");
         _bloqueoActivo.Value = true;
         return new Liberador(this);
     }
@@ -44,7 +39,6 @@ public class LocalDbService(IJSRuntime js)
         {
             _bloqueoActivo.Value = false;
             owner._bloqueo.Release();
-            Console.WriteLine("[HA-diag] BloqueoAsync: liberado");
         }
     }
 
@@ -52,12 +46,7 @@ public class LocalDbService(IJSRuntime js)
 
     private async Task<List<T>> CargarLista<T>(string key)
     {
-        // DIAG temporal: cada llamada a storage.get/set queda registrada con su duración, para
-        // localizar exactamente en qué operación de almacenamiento local se queda parada la app.
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        Console.WriteLine($"[HA-diag] storage.get({key}): iniciando");
         var result = await js.InvokeAsync<JsonElement?>("storage.get", key);
-        Console.WriteLine($"[HA-diag] storage.get({key}): terminado en {sw.ElapsedMilliseconds} ms");
         if (result is null || result.Value.ValueKind == JsonValueKind.Null)
             return [];
         return JsonSerializer.Deserialize<List<T>>(result.Value.GetRawText(), _json) ?? [];
@@ -65,17 +54,13 @@ public class LocalDbService(IJSRuntime js)
 
     private async Task GuardarLista<T>(string key, List<T> lista)
     {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        Console.WriteLine($"[HA-diag] storage.set({key}, {lista.Count} elementos): iniciando");
         await js.InvokeVoidAsync("storage.set", key, lista);
-        Console.WriteLine($"[HA-diag] storage.set({key}): terminado en {sw.ElapsedMilliseconds} ms, verificando...");
 
         // No fiarse a ciegas de que localStorage.setItem ha funcionado: releer y confirmar que lo
         // guardado coincide en número de elementos. Si no coincide (cuota llena, modo privado del
         // navegador, o cualquier fallo silencioso), fallar alto en vez de dejar creer al usuario
         // que su movimiento se guardó cuando en realidad se perdió.
         var guardado = await CargarLista<T>(key);
-        Console.WriteLine($"[HA-diag] storage.set({key}): verificado, {sw.ElapsedMilliseconds} ms totales");
         if (guardado.Count != lista.Count)
             throw new InvalidOperationException(
                 $"No se pudo confirmar el guardado en el dispositivo ({key}): se esperaban {lista.Count} elementos y hay {guardado.Count}. " +
@@ -103,7 +88,7 @@ public class LocalDbService(IJSRuntime js)
         var lista = await ObtenerMovimientosAsync();
         lista.RemoveAll(m => m.Id == id);
         await GuardarLista(KeyMovimientos, lista);
-        await MarcarEliminadoAsync(id);
+        await MarcarEliminadosAsync([id]);
     }
 
     public async Task<bool> ExisteMovimientoRecurrenteAsync(string recurrenteId, string periodo)
@@ -133,7 +118,7 @@ public class LocalDbService(IJSRuntime js)
         var lista = await ObtenerRecurrentesAsync();
         lista.RemoveAll(r => r.Id == id);
         await GuardarLista(KeyRecurrentes, lista);
-        await MarcarEliminadoAsync(id);
+        await MarcarEliminadosAsync([id]);
     }
 
     // --- Cuentas ---
@@ -157,7 +142,7 @@ public class LocalDbService(IJSRuntime js)
         var lista = await ObtenerCuentasAsync();
         lista.RemoveAll(c => c.Id == id);
         await GuardarLista(KeyCuentas, lista);
-        await MarcarEliminadoAsync(id);
+        await MarcarEliminadosAsync([id]);
     }
 
     // --- Categorías ---
@@ -181,7 +166,7 @@ public class LocalDbService(IJSRuntime js)
         var lista = await ObtenerCategoriasAsync();
         lista.RemoveAll(c => c.Id == id);
         await GuardarLista(KeyCategorias, lista);
-        await MarcarEliminadoAsync(id);
+        await MarcarEliminadosAsync([id]);
     }
 
     // --- Eliminados (tombstones para sync) ---
@@ -192,13 +177,19 @@ public class LocalDbService(IJSRuntime js)
         return lista.ToHashSet();
     }
 
-    public async Task MarcarEliminadoAsync(string id)
+    // Igual que los Reemplazar*Async: no coge el bloqueo, asume que quien llama ya lo tiene (así
+    // es en los 5 sitios que la usan hoy). Llamarla sin el bloqueo cogido reintroduce la misma
+    // condición de carrera que este bloqueo existe para evitar. Antes había una versión de un solo
+    // id que sí cogía el bloqueo por su cuenta — al llamarse siempre desde dentro de una operación
+    // que ya lo tenía cogido, esa segunda petición se quedaba esperando a que se soltara un
+    // bloqueo que ella misma sujetaba, colgando la app para siempre.
+    public async Task MarcarEliminadosAsync(IEnumerable<string> ids)
     {
-        using var _ = await BloqueoAsync();
         var lista = await CargarLista<string>(KeyEliminados);
-        if (!lista.Contains(id))
+        var nuevos = ids.Where(id => !lista.Contains(id)).ToList();
+        if (nuevos.Count > 0)
         {
-            lista.Add(id);
+            lista.AddRange(nuevos);
             await GuardarLista(KeyEliminados, lista);
         }
     }

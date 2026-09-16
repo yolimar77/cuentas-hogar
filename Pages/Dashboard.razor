@@ -332,13 +332,9 @@
 
     private async Task Cargar()
     {
-        Console.WriteLine($"[HA-diag] Dashboard.Cargar: ReconciliarMesAsync({_mesVista}/{_anyoVista})...");
         await Prevision.ReconciliarMesAsync(_mesVista, _anyoVista);
-        Console.WriteLine($"[HA-diag] Dashboard.Cargar: GenerarMovimientosRecurrentesAsync({_mesVista}/{_anyoVista})...");
         await Prevision.GenerarMovimientosRecurrentesAsync(_mesVista, _anyoVista);
-        Console.WriteLine("[HA-diag] Dashboard.Cargar: CalcularAsync...");
         _prevision = await Prevision.CalcularAsync(_mesVista, _anyoVista);
-        Console.WriteLine("[HA-diag] Dashboard.Cargar: prevision lista");
 
         var todos = await Db.ObtenerMovimientosAsync();
         var categorias = await Db.ObtenerCategoriasAsync();

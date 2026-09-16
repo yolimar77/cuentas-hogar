@@ -75,6 +75,21 @@ public class PrevisionService(LocalDbService db)
     {
         using var _ = await db.BloqueoAsync();
         var recurrentes = await db.ObtenerRecurrentesAsync();
+
+        // Leer los movimientos una sola vez y comprobar "¿ya existe este periodo?" en memoria, en
+        // vez de una llamada a ExisteMovimientoRecurrenteAsync/GuardarMovimientoAsync por cada mes
+        // de cada recurrente. Además de más rápido, evita que GuardarMovimientoAsync vuelva a pedir
+        // este mismo bloqueo desde dentro — eso era lo que dejaba la app colgada para siempre: la
+        // primera vez que hacía falta crear un movimiento nuevo (no solo comprobar que ya existía),
+        // la petición anidada del bloqueo se quedaba esperando a que se soltara uno que ella misma
+        // tenía cogido.
+        var movimientos = await db.ObtenerMovimientosAsync();
+        var existentes = movimientos
+            .Where(m => m.RecurrenteId != null)
+            .Select(m => (m.RecurrenteId!, m.Periodo))
+            .ToHashSet();
+        var nuevos = new List<Movimiento>();
+
         var hoy = DateTime.Today;
         var finHorizonte = (mesFin.HasValue && anyoFin.HasValue)
             ? new DateTime(anyoFin.Value, mesFin.Value, DateTime.DaysInMonth(anyoFin.Value, mesFin.Value))
@@ -104,9 +119,9 @@ public class PrevisionService(LocalDbService db)
                 while (cursor <= limite)
                 {
                     var periodo = cursor.ToString("yyyy-MM-dd");
-                    if (!await db.ExisteMovimientoRecurrenteAsync(rec.Id, periodo))
+                    if (existentes.Add((rec.Id, periodo)))
                     {
-                        await db.GuardarMovimientoAsync(new Movimiento
+                        nuevos.Add(new Movimiento
                         {
                             Concepto     = rec.Concepto,
                             Importe      = rec.Importe,
@@ -128,10 +143,10 @@ public class PrevisionService(LocalDbService db)
                 while (new DateTime(anyo, rec.FechaInicio.Month, 1) <= limite)
                 {
                     var periodo = $"{anyo:0000}-{rec.FechaInicio.Month:00}";
-                    if (!await db.ExisteMovimientoRecurrenteAsync(rec.Id, periodo))
+                    if (existentes.Add((rec.Id, periodo)))
                     {
                         var dia = Math.Min(rec.FechaInicio.Day, DateTime.DaysInMonth(anyo, rec.FechaInicio.Month));
-                        await db.GuardarMovimientoAsync(new Movimiento
+                        nuevos.Add(new Movimiento
                         {
                             Concepto     = rec.Concepto,
                             Importe      = rec.Importe,
@@ -153,10 +168,10 @@ public class PrevisionService(LocalDbService db)
                 while (fecha <= limite)
                 {
                     var periodo = fecha.ToString("yyyy-MM");
-                    if (!await db.ExisteMovimientoRecurrenteAsync(rec.Id, periodo))
+                    if (existentes.Add((rec.Id, periodo)))
                     {
                         var dia = Math.Min(rec.DiaDelMes, DateTime.DaysInMonth(fecha.Year, fecha.Month));
-                        await db.GuardarMovimientoAsync(new Movimiento
+                        nuevos.Add(new Movimiento
                         {
                             Concepto     = rec.Concepto,
                             Importe      = rec.Importe,
@@ -171,6 +186,12 @@ public class PrevisionService(LocalDbService db)
                     fecha = fecha.AddMonths(1);
                 }
             }
+        }
+
+        if (nuevos.Count > 0)
+        {
+            movimientos.AddRange(nuevos);
+            await db.ReemplazarMovimientosAsync(movimientos);
         }
     }
 
