@@ -17,7 +17,7 @@
         @if (Sync.SincronizandoAhora)
         {
             <i class="ph-bold ph-arrows-clockwise ph-spin text-primary" style="font-size:1rem"></i>
-            <span class="text-muted">Sincronizando...</span>
+            <span class="text-muted">Sincronizando... @(Sync.PasoActual is not null ? $"({Sync.PasoActual})" : "")</span>
         }
         else if (!Drive.Conectado)
         {

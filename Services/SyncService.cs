@@ -17,6 +17,10 @@ public class SyncService(DriveService drive, LocalDbService db)
     public string? UltimoError { get; private set; }
     public string? UltimoDetalle { get; private set; }
 
+    // Solo diagnóstico: en qué paso concreto está la sync ahora mismo, para poder saber dónde se
+    // queda parada si vuelve a pasar, sin necesidad de la consola del navegador.
+    public string? PasoActual { get; private set; }
+
     public event Func<Task>? OnSyncCompletado;
     public event Action? OnEstadoCambiado;
 
@@ -35,30 +39,46 @@ public class SyncService(DriveService drive, LocalDbService db)
             // ese momento. Si se mantuviera un único bloqueo durante toda la sync, una llamada a
             // Drive que se cuelga bloquearía también cualquier guardado/lectura local del resto
             // de la app durante todo ese tiempo (esto pasó: sync colgada = app entera colgada).
+            PasoActual = "listando archivos";
+            OnEstadoCambiado?.Invoke();
             var archivos = await drive.ListarArchivosAsync();
             var idx = new Dictionary<string, DriveFileInfo>();
             foreach (var f in archivos) idx[f.Nombre] = f;
 
             // 1. Propagar eliminaciones
+            PasoActual = "borrados";
+            OnEstadoCambiado?.Invoke();
             var eliminados = await SincronizarEliminacionesAsync(idx);
 
             // 2. Categorías y cuentas primero: dos dispositivos pueden haber creado una
             //    con el mismo nombre antes de sincronizar entre sí. MergeCategoriasAsync/
             //    MergeCuentasAsync deduplican por nombre y devuelven el remap idPerdedor->idGanador.
-            var (cambiosCat, remapCats)     = await MergeCategoriasAsync(idx, eliminados);
+            PasoActual = "categorías";
+            OnEstadoCambiado?.Invoke();
+            var (cambiosCat, remapCats) = await MergeCategoriasAsync(idx, eliminados);
+            PasoActual = "cuentas";
+            OnEstadoCambiado?.Invoke();
             var (cambiosCuent, remapCuents) = await MergeCuentasAsync(idx, eliminados);
 
             // 3. Reparar movimientos/recurrentes que quedaran apuntando a un Id descartado
             //    en el paso anterior. IMPORTANTE: no eliminar este paso sin preservar el
             //    remapeo — quitarlo (como pasó una vez en el pasado) deja categorías en
             //    blanco al sincronizar entre dispositivos.
+            PasoActual = "reparando referencias";
+            OnEstadoCambiado?.Invoke();
             int cambiosReparacion = await AplicarRemapReferenciasAsync(remapCats, remapCuents);
 
             // 4. Merge movimientos y recurrentes
+            PasoActual = "movimientos";
+            OnEstadoCambiado?.Invoke();
             int cambiosMov = await MergeMovimientosAsync(idx, eliminados);
+            PasoActual = "recurrentes";
+            OnEstadoCambiado?.Invoke();
             int cambiosRec = await MergeRecurrentesAsync(idx, eliminados);
 
             // 5. Propagar categoría/cuenta del recurrente a sus movimientos generados
+            PasoActual = "propagando recurrentes";
+            OnEstadoCambiado?.Invoke();
             int cambiosPropagacion = await PropagarcategoriasRecurrentesAsync();
 
             int totalCambios = cambiosMov + cambiosRec + cambiosCat + cambiosCuent + cambiosReparacion + cambiosPropagacion;
@@ -79,6 +99,7 @@ public class SyncService(DriveService drive, LocalDbService db)
         finally
         {
             SincronizandoAhora = false;
+            PasoActual = null;
             OnEstadoCambiado?.Invoke();
         }
     }
