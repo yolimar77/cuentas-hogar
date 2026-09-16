@@ -17,35 +17,38 @@ public class LocalDbService(IJSRuntime js)
     // Serializa las secuencias leer-modificar-escribir sobre el almacenamiento local. Sin esto,
     // una sincronización en curso (que lee, tarda segundos hablando con Drive, y luego sobrescribe
     // la lista completa) puede pisar con una foto vieja un movimiento guardado mientras tanto,
-    // borrándolo sin más. Reentrante vía AsyncLocal: si el flujo async actual ya tiene el bloqueo
-    // (p.ej. SincronizarAsync llamando a GenerarMovimientosRecurrentesAsync), no vuelve a esperar.
+    // borrándolo sin más.
+    //
+    // IMPORTANTE — la reentrada vía AsyncLocal (_bloqueoActivo) NO es fiable en cuanto de por medio
+    // ha habido al menos una llamada a JS interop (cualquier storage.get/set) desde que se cogió el
+    // bloqueo: el AsyncLocal deja de propagarse como "true" y una llamada anidada a BloqueoAsync()
+    // se queda esperando a que se suelte un bloqueo que ella misma tiene cogido (autodeadlock). Esto
+    // costó varias rondas de depuración encontrarlo (2026-09-16). Por eso, cualquier método que
+    // necesite ser llamado tanto en solitario como desde dentro de un bloqueo ya cogido debe tener
+    // dos versiones — una pública que coge el bloqueo, y un núcleo "SinBloqueo" que no lo coge y que
+    // usan tanto la versión pública como los llamadores que ya lo tienen (ver GenerarMovimientosRecurrentesAsync/
+    // GenerarMovimientosRecurrentesSinBloqueoAsync y MarcarEliminadosAsync como ejemplos) — no confiar
+    // en que la reentrada automática vaya a funcionar.
     private readonly SemaphoreSlim _bloqueo = new(1, 1);
     private static readonly AsyncLocal<bool> _bloqueoActivo = new();
     private static readonly IDisposable _bloqueoReentrante = new BloqueoNulo();
-    private static int _bloqueoContador = 0;
 
     public async Task<IDisposable> BloqueoAsync()
     {
         if (_bloqueoActivo.Value) return _bloqueoReentrante;
-        // DIAG temporal: cada intento lleva un número, para saber cuál se queda sin su "adquirido"
-        // (esperando para siempre) y cuál libera sin haber avisado que esperaba (bug de reentrada).
-        var n = System.Threading.Interlocked.Increment(ref _bloqueoContador);
-        Console.WriteLine($"[HA-diag] BloqueoAsync #{n}: esperando semáforo...");
         await _bloqueo.WaitAsync();
-        Console.WriteLine($"[HA-diag] BloqueoAsync #{n}: adquirido");
         _bloqueoActivo.Value = true;
-        return new Liberador(this, n);
+        return new Liberador(this);
     }
 
     private sealed class BloqueoNulo : IDisposable { public void Dispose() { } }
 
-    private sealed class Liberador(LocalDbService owner, int n) : IDisposable
+    private sealed class Liberador(LocalDbService owner) : IDisposable
     {
         public void Dispose()
         {
             _bloqueoActivo.Value = false;
             owner._bloqueo.Release();
-            Console.WriteLine($"[HA-diag] BloqueoAsync #{n}: liberado");
         }
     }
 
