@@ -30,6 +30,7 @@ public class SyncService(DriveService drive, LocalDbService db)
         SincronizandoAhora = true;
         UltimoError = null;
         OnEstadoCambiado?.Invoke();
+        Console.WriteLine("[HA-diag] SincronizarAsync: inicio");
 
         try
         {
@@ -41,6 +42,7 @@ public class SyncService(DriveService drive, LocalDbService db)
             // de la app durante todo ese tiempo (esto pasó: sync colgada = app entera colgada).
             PasoActual = "listando archivos";
             OnEstadoCambiado?.Invoke();
+            Console.WriteLine($"[HA-diag] Paso: {PasoActual}");
             var archivos = await drive.ListarArchivosAsync();
             var idx = new Dictionary<string, DriveFileInfo>();
             foreach (var f in archivos) idx[f.Nombre] = f;
@@ -48,6 +50,7 @@ public class SyncService(DriveService drive, LocalDbService db)
             // 1. Propagar eliminaciones
             PasoActual = "borrados";
             OnEstadoCambiado?.Invoke();
+            Console.WriteLine($"[HA-diag] Paso: {PasoActual}");
             var eliminados = await SincronizarEliminacionesAsync(idx);
 
             // 2. Categorías y cuentas primero: dos dispositivos pueden haber creado una
@@ -55,9 +58,11 @@ public class SyncService(DriveService drive, LocalDbService db)
             //    MergeCuentasAsync deduplican por nombre y devuelven el remap idPerdedor->idGanador.
             PasoActual = "categorías";
             OnEstadoCambiado?.Invoke();
+            Console.WriteLine($"[HA-diag] Paso: {PasoActual}");
             var (cambiosCat, remapCats) = await MergeCategoriasAsync(idx, eliminados);
             PasoActual = "cuentas";
             OnEstadoCambiado?.Invoke();
+            Console.WriteLine($"[HA-diag] Paso: {PasoActual}");
             var (cambiosCuent, remapCuents) = await MergeCuentasAsync(idx, eliminados);
 
             // 3. Reparar movimientos/recurrentes que quedaran apuntando a un Id descartado
@@ -66,24 +71,29 @@ public class SyncService(DriveService drive, LocalDbService db)
             //    blanco al sincronizar entre dispositivos.
             PasoActual = "reparando referencias";
             OnEstadoCambiado?.Invoke();
+            Console.WriteLine($"[HA-diag] Paso: {PasoActual}");
             int cambiosReparacion = await AplicarRemapReferenciasAsync(remapCats, remapCuents);
 
             // 4. Merge movimientos y recurrentes
             PasoActual = "movimientos";
             OnEstadoCambiado?.Invoke();
+            Console.WriteLine($"[HA-diag] Paso: {PasoActual}");
             int cambiosMov = await MergeMovimientosAsync(idx, eliminados);
             PasoActual = "recurrentes";
             OnEstadoCambiado?.Invoke();
+            Console.WriteLine($"[HA-diag] Paso: {PasoActual}");
             int cambiosRec = await MergeRecurrentesAsync(idx, eliminados);
 
             // 5. Propagar categoría/cuenta del recurrente a sus movimientos generados
             PasoActual = "propagando recurrentes";
             OnEstadoCambiado?.Invoke();
+            Console.WriteLine($"[HA-diag] Paso: {PasoActual}");
             int cambiosPropagacion = await PropagarcategoriasRecurrentesAsync();
 
             int totalCambios = cambiosMov + cambiosRec + cambiosCat + cambiosCuent + cambiosReparacion + cambiosPropagacion;
             UltimaSincronizacion = DateTime.Now;
             UltimoDetalle = $"Sync OK · {totalCambios} cambios";
+            Console.WriteLine($"[HA-diag] SincronizarAsync: pasos OK, {totalCambios} cambios, invocando OnSyncCompletado");
 
             // Se avisa siempre que la sync termina bien, no solo si el diff detectó cambios de
             // contenido: un movimiento guardado en este dispositivo pasa de "pendiente" a
@@ -91,16 +101,19 @@ public class SyncService(DriveService drive, LocalDbService db)
             // y la UI necesita refrescarse igualmente para dejar de mostrar el aviso de pendiente.
             if (OnSyncCompletado is not null)
                 await OnSyncCompletado.Invoke();
+            Console.WriteLine("[HA-diag] SincronizarAsync: OnSyncCompletado terminado");
         }
         catch (Exception ex)
         {
             UltimoError = ex.Message;
+            Console.WriteLine($"[HA-diag] SincronizarAsync: EXCEPCIÓN — {ex}");
         }
         finally
         {
             SincronizandoAhora = false;
             PasoActual = null;
             OnEstadoCambiado?.Invoke();
+            Console.WriteLine("[HA-diag] SincronizarAsync: fin (finally)");
         }
     }
 

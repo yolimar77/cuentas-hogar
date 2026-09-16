@@ -19,8 +19,11 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Console.WriteLine("[HA-diag] App.OnInitializedAsync: InicializarDatosDefaultAsync...");
         await Db.InicializarDatosDefaultAsync();
+        Console.WriteLine("[HA-diag] App.OnInitializedAsync: GenerarMovimientosRecurrentesAsync (arranque)...");
         await Prevision.GenerarMovimientosRecurrentesAsync();
+        Console.WriteLine("[HA-diag] App.OnInitializedAsync: fin");
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
