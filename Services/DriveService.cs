@@ -295,13 +295,49 @@ public class DriveService(IJSRuntime js, HttpClient http)
 
     public async Task<string?> DescargarArchivoAsync(string fileId)
     {
-        var response = await EnviarAsync(HttpMethod.Get, $"{ApiBase}/files/{fileId}?alt=media");
+        var url = $"{ApiBase}/files/{fileId}?alt=media";
+        var response = await EnviarAsync(HttpMethod.Get, url);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await IntentarRefreshSilenciosoAsync())
+            {
+                response = await EnviarAsync(HttpMethod.Get, url);
+            }
+            else
+            {
+                NecesitaReconectar = true;
+                OnEstadoCambiado?.Invoke();
+                throw new Exception("Token de Google expirado. Reconéctate.");
+            }
+        }
+
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadAsStringAsync();
     }
 
-    public async Task EliminarArchivoAsync(string fileId) =>
-        await EnviarAsync(HttpMethod.Delete, $"{ApiBase}/files/{fileId}");
+    public async Task EliminarArchivoAsync(string fileId)
+    {
+        var url = $"{ApiBase}/files/{fileId}";
+        var response = await EnviarAsync(HttpMethod.Delete, url);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (await IntentarRefreshSilenciosoAsync())
+            {
+                response = await EnviarAsync(HttpMethod.Delete, url);
+            }
+            else
+            {
+                NecesitaReconectar = true;
+                OnEstadoCambiado?.Invoke();
+                throw new Exception("Token de Google expirado. Reconéctate.");
+            }
+        }
+
+        if (!response.IsSuccessStatusCode)
+            throw new Exception($"Error al eliminar archivo Drive ({(int)response.StatusCode})");
+    }
 
     public async Task ActualizarContenidoAsync(string fileId, string contenidoJson)
     {
