@@ -272,7 +272,17 @@ public class SyncService(DriveService drive, LocalDbService db)
             if (!final.TryGetValue(mov.Id, out var existente) || mov.ModificadoEn > existente.ModificadoEn)
                 final[mov.Id] = mov;
         }
-        var listaFinal = final.Values.OrderBy(m => m.Fecha).ToList();
+
+        // "actual" (releído tras hablar con Drive) puede seguir teniendo duplicados de
+        // recurrente+periodo con Id distinto que "lista" ya había fusionado en uno — este bucle
+        // los vuelve a meter porque compara por Id, no por recurrente+periodo. Sin este segundo
+        // filtro, esos duplicados nunca llegaban a limpiarse del almacenamiento local: cada
+        // sincronización los volvía a escribir tal cual, aunque Drive ya tuviera la versión buena.
+        var listaFinal = final.Values
+            .GroupBy(m => m.RecurrenteId != null ? $"{m.RecurrenteId}_{m.Periodo}" : m.Id)
+            .Select(g => g.OrderByDescending(m => m.ModificadoEn).First())
+            .OrderBy(m => m.Fecha)
+            .ToList();
 
         var listaIds  = listaFinal.Select(m => m.Id).ToHashSet();
         var localById = local.ToDictionary(m => m.Id);
