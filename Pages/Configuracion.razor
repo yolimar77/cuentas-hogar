@@ -10,6 +10,11 @@
 <div class="container-sm py-3">
     <h5 class="mb-3">Configuración</h5>
 
+    @if (_errorLista is not null)
+    {
+        <div class="alert alert-danger small py-2" role="alert">⚠️ @_errorLista</div>
+    }
+
     <!-- Google Drive -->
     <div class="card mb-3">
         <div class="card-body">
@@ -144,6 +149,10 @@
                 <div class="modal-body">
                     <input class="form-control mb-2" @bind="_nuevaCuenta.Nombre" placeholder="Nombre de la cuenta" />
                     <input class="form-control" type="number" step="0.01" @bind="_nuevaCuenta.SaldoInicial" placeholder="Saldo inicial (€)" />
+                    @if (_errorCuenta is not null)
+                    {
+                        <p class="text-danger small mt-2 mb-0">@_errorCuenta</p>
+                    }
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary btn-sm" @onclick="() => _mostrarCuenta = false">Cancelar</button>
@@ -199,6 +208,8 @@
     private List<Cuenta> _cuentas = [];
     private List<Categoria> _categorias = [];
     private bool _mostrarCuenta = false;
+    private string? _errorCuenta;
+    private string? _errorLista;
     private bool _mostrarCategoria = false;
     private Cuenta _nuevaCuenta = new();
     private Categoria _nuevaCategoria = new();
@@ -244,7 +255,7 @@
             .ToList();
     }
 
-    private void AbrirNuevaCuenta() { _nuevaCuenta = new Cuenta(); _mostrarCuenta = true; }
+    private void AbrirNuevaCuenta() { _nuevaCuenta = new Cuenta(); _errorCuenta = null; _mostrarCuenta = true; }
 
     private void AbrirNuevaCategoria()
     {
@@ -272,12 +283,20 @@
 
     private async Task GuardarCuenta()
     {
+        _errorCuenta = null;
         if (string.IsNullOrWhiteSpace(_nuevaCuenta.Nombre)) return;
-        _nuevaCuenta.ModificadoEn = DateTime.UtcNow;
-        await Db.GuardarCuentaAsync(_nuevaCuenta);
-        await Cargar();
-        _mostrarCuenta = false;
-        _ = Sync.SincronizarAsync();
+        try
+        {
+            _nuevaCuenta.ModificadoEn = DateTime.UtcNow;
+            await Db.GuardarCuentaAsync(_nuevaCuenta);
+            await Cargar();
+            _mostrarCuenta = false;
+            _ = Sync.SincronizarAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorCuenta = $"No se ha podido guardar: {ex.Message}";
+        }
     }
 
     private async Task GuardarCategoria()
@@ -304,38 +323,54 @@
 
     private async Task EliminarCuenta(string id)
     {
-        var target = (await Db.ObtenerCuentasAsync()).FirstOrDefault(c => c.Id == id);
-        if (target is not null)
+        _errorLista = null;
+        try
         {
-            var todas = await Db.ObtenerCuentasAsync();
-            foreach (var dup in todas.Where(c => c.Nombre == target.Nombre))
-                await Db.EliminarCuentaAsync(dup.Id);
+            var target = (await Db.ObtenerCuentasAsync()).FirstOrDefault(c => c.Id == id);
+            if (target is not null)
+            {
+                var todas = await Db.ObtenerCuentasAsync();
+                foreach (var dup in todas.Where(c => c.Nombre == target.Nombre))
+                    await Db.EliminarCuentaAsync(dup.Id);
+            }
+            else
+            {
+                await Db.EliminarCuentaAsync(id);
+            }
+            await Cargar();
+            _ = Sync.SincronizarAsync();
         }
-        else
+        catch (Exception ex)
         {
-            await Db.EliminarCuentaAsync(id);
+            _errorLista = $"No se ha podido eliminar la cuenta: {ex.Message}";
         }
-        await Cargar();
-        _ = Sync.SincronizarAsync();
     }
 
     private async Task EliminarCategoria(string id)
     {
-        // Eliminar también duplicados con el mismo nombre+tipo para limpiar la BD
-        var target = (await Db.ObtenerCategoriasAsync()).FirstOrDefault(c => c.Id == id);
-        if (target is not null)
+        _errorLista = null;
+        try
         {
-            var todas = await Db.ObtenerCategoriasAsync();
-            var duplicados = todas.Where(c => c.Nombre == target.Nombre && c.Tipo == target.Tipo).ToList();
-            foreach (var dup in duplicados)
-                await Db.EliminarCategoriaAsync(dup.Id);
+            // Eliminar también duplicados con el mismo nombre+tipo para limpiar la BD
+            var target = (await Db.ObtenerCategoriasAsync()).FirstOrDefault(c => c.Id == id);
+            if (target is not null)
+            {
+                var todas = await Db.ObtenerCategoriasAsync();
+                var duplicados = todas.Where(c => c.Nombre == target.Nombre && c.Tipo == target.Tipo).ToList();
+                foreach (var dup in duplicados)
+                    await Db.EliminarCategoriaAsync(dup.Id);
+            }
+            else
+            {
+                await Db.EliminarCategoriaAsync(id);
+            }
+            await Cargar();
+            _ = Sync.SincronizarAsync();
         }
-        else
+        catch (Exception ex)
         {
-            await Db.EliminarCategoriaAsync(id);
+            _errorLista = $"No se ha podido eliminar la categoría: {ex.Message}";
         }
-        await Cargar();
-        _ = Sync.SincronizarAsync();
     }
 
     private async Task Conectar()

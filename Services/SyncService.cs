@@ -29,6 +29,12 @@ public class SyncService(DriveService drive, LocalDbService db)
 
         try
         {
+            // Bloqueo de principio a fin: cada paso interno lee el almacenamiento local, tarda
+            // hablando con Drive, y luego sobrescribe la lista completa. Sin mantener el bloqueo
+            // durante todo el ciclo, un movimiento guardado localmente a mitad de la sync se
+            // perdería al pisarlo con la foto tomada al principio de ese paso.
+            using var _ = await db.BloqueoAsync();
+
             var archivos = await drive.ListarArchivosAsync();
             var idx = new Dictionary<string, DriveFileInfo>();
             foreach (var f in archivos) idx[f.Nombre] = f;
@@ -59,7 +65,11 @@ public class SyncService(DriveService drive, LocalDbService db)
             UltimaSincronizacion = DateTime.Now;
             UltimoDetalle = $"Sync OK · {totalCambios} cambios";
 
-            if (totalCambios > 0 && OnSyncCompletado is not null)
+            // Se avisa siempre que la sync termina bien, no solo si el diff detectó cambios de
+            // contenido: un movimiento guardado en este dispositivo pasa de "pendiente" a
+            // "sincronizado" (campo Sincronizado) sin que eso cuente como "cambio" para el diff,
+            // y la UI necesita refrescarse igualmente para dejar de mostrar el aviso de pendiente.
+            if (OnSyncCompletado is not null)
                 await OnSyncCompletado.Invoke();
         }
         catch (Exception ex)
@@ -75,6 +85,7 @@ public class SyncService(DriveService drive, LocalDbService db)
 
     public async Task RestablecerTombstonesAsync()
     {
+        using var _ = await db.BloqueoAsync();
         await db.LimpiarTodosEliminadosAsync();
         var archivos = await drive.ListarArchivosAsync();
         var idx = new Dictionary<string, DriveFileInfo>();
@@ -84,8 +95,11 @@ public class SyncService(DriveService drive, LocalDbService db)
     }
 
     // Punto de entrada público para propagar desde la UI (al guardar un recurrente)
-    public async Task PropagateRecurrentesAsync() =>
+    public async Task PropagateRecurrentesAsync()
+    {
+        using var _ = await db.BloqueoAsync();
         await PropagarcategoriasRecurrentesAsync();
+    }
 
     // Repara movimientos y recurrentes que apunten a un CategoriaId/CuentaId descartado
     // por la deduplicación de MergeCategoriasAsync/MergeCuentasAsync, en vez de dejarlos

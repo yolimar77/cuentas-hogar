@@ -73,6 +73,7 @@ public class PrevisionService(LocalDbService db)
 
     public async Task GenerarMovimientosRecurrentesAsync(int? mesFin = null, int? anyoFin = null)
     {
+        using var _ = await db.BloqueoAsync();
         var recurrentes = await db.ObtenerRecurrentesAsync();
         var hoy = DateTime.Today;
         var finHorizonte = (mesFin.HasValue && anyoFin.HasValue)
@@ -170,6 +171,7 @@ public class PrevisionService(LocalDbService db)
         if (new DateTime(anyo, mes, 1) < new DateTime(hoy.Year, hoy.Month, 1))
             return;
 
+        using var _ = await db.BloqueoAsync();
         var recurrentes = await db.ObtenerRecurrentesAsync();
         var recById = recurrentes.ToDictionary(r => r.Id);
         var todos = await db.ObtenerMovimientosAsync();

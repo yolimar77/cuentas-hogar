@@ -4,6 +4,7 @@
 @inject LocalDbService Db
 @inject PrevisionService Prevision
 @inject SyncService Sync
+@inject DriveService Drive
 @implements IDisposable
 
 <div class="container-sm py-3">
@@ -12,6 +13,11 @@
         <h5 class="mb-0">Movimientos</h5>
         <button class="btn btn-primary btn-sm" @onclick="AbrirNuevo"><i class="ph-bold ph-plus"></i> Nuevo</button>
     </div>
+
+    @if (_errorGuardar is not null && !_mostrarFormulario)
+    {
+        <div class="alert alert-danger small py-2" role="alert">⚠️ @_errorGuardar</div>
+    }
 
     <!-- Filtro de mes -->
     <div class="d-flex gap-2 mb-1 align-items-center">
@@ -78,6 +84,10 @@
                     <div>
                         <div>@mov.Concepto @(mov.RecurrenteId is not null ? new MarkupString("<i class=\"ph-bold ph-repeat\" style=\"font-size:0.8rem;opacity:0.6\"></i>") : new MarkupString(""))</div>
                         <small class="text-muted">@mov.Fecha.ToString("dd/MM") · @NombreCategoria(mov.CategoriaId)</small>
+                        @if (Drive.Conectado && !mov.Sincronizado)
+                        {
+                            <div><span class="badge bg-warning text-dark" style="font-size:0.65rem" title="Guardado en este dispositivo, todavía no confirmado en Google Drive">⏳ Pendiente de sincronizar</span></div>
+                        }
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span class="fw-bold @(mov.Tipo == TipoMovimiento.Ingreso ? "text-success" : "text-danger")">
@@ -147,6 +157,10 @@
                             }
                         </select>
                     </div>
+                    @if (_errorGuardar is not null)
+                    {
+                        <div class="alert alert-danger small py-2 mb-0" role="alert">⚠️ @_errorGuardar</div>
+                    }
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary btn-sm" @onclick="Cerrar">Cancelar</button>
@@ -168,6 +182,7 @@
     private DateTime _mesFiltro = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private string _ordenarPor = "fecha";
     private bool _ordenAscendente = false;
+    private string? _errorGuardar;
 
     protected override async Task OnInitializedAsync()
     {
@@ -185,22 +200,30 @@
 
     private async Task Cargar()
     {
-        await Prevision.ReconciliarMesAsync(_mesFiltro.Month, _mesFiltro.Year);
-        await Prevision.GenerarMovimientosRecurrentesAsync(_mesFiltro.Month, _mesFiltro.Year);
-        _prevision = await Prevision.CalcularAsync(_mesFiltro.Month, _mesFiltro.Year);
-        var todos = await Db.ObtenerMovimientosAsync();
-        _movimientos = todos
-            .Where(m => m.Fecha.Month == _mesFiltro.Month && m.Fecha.Year == _mesFiltro.Year)
-            .ToList();
-        _categorias = (await Db.ObtenerCategoriasAsync())
-            .GroupBy(c => (c.Nombre, c.Tipo))
-            .Select(g => g.First())
-            .ToList();
-        _cuentas = await Db.ObtenerCuentasAsync();
+        try
+        {
+            await Prevision.ReconciliarMesAsync(_mesFiltro.Month, _mesFiltro.Year);
+            await Prevision.GenerarMovimientosRecurrentesAsync(_mesFiltro.Month, _mesFiltro.Year);
+            _prevision = await Prevision.CalcularAsync(_mesFiltro.Month, _mesFiltro.Year);
+            var todos = await Db.ObtenerMovimientosAsync();
+            _movimientos = todos
+                .Where(m => m.Fecha.Month == _mesFiltro.Month && m.Fecha.Year == _mesFiltro.Year)
+                .ToList();
+            _categorias = (await Db.ObtenerCategoriasAsync())
+                .GroupBy(c => (c.Nombre, c.Tipo))
+                .Select(g => g.First())
+                .ToList();
+            _cuentas = await Db.ObtenerCuentasAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorGuardar = $"No se han podido cargar los movimientos: {ex.Message}";
+        }
     }
 
     private void AbrirNuevo()
     {
+        _errorGuardar = null;
         _nuevo = new Movimiento { Tipo = TipoMovimiento.Gasto, Fecha = DateTime.Today, ModificadoEn = DateTime.UtcNow };
         if (_cuentas.Count > 0) _nuevo.CuentaId = _cuentas[0].Id;
         _esEdicion = false;
@@ -229,21 +252,37 @@
 
     private async Task Guardar()
     {
+        _errorGuardar = null;
         if (string.IsNullOrWhiteSpace(_nuevo.Concepto) || _nuevo.Importe <= 0) return;
-        await Db.GuardarMovimientoAsync(_nuevo);
-        await Cargar();
-        _mostrarFormulario = false;
-        _ = Sync.SincronizarAsync();
+        try
+        {
+            await Db.GuardarMovimientoAsync(_nuevo);
+            await Cargar();
+            _mostrarFormulario = false;
+            _ = Sync.SincronizarAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorGuardar = $"No se ha podido guardar: {ex.Message}";
+        }
     }
 
     private async Task Eliminar(string id)
     {
-        await Db.EliminarMovimientoAsync(id);
-        await Cargar();
-        _ = Sync.SincronizarAsync();
+        _errorGuardar = null;
+        try
+        {
+            await Db.EliminarMovimientoAsync(id);
+            await Cargar();
+            _ = Sync.SincronizarAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorGuardar = $"No se ha podido eliminar: {ex.Message}";
+        }
     }
 
-    private void Cerrar() { _mostrarFormulario = false; _esEdicion = false; }
+    private void Cerrar() { _mostrarFormulario = false; _esEdicion = false; _errorGuardar = null; }
 
     private async Task MesAnterior() { _mesFiltro = _mesFiltro.AddMonths(-1); await Cargar(); }
     private async Task MesSiguiente() { _mesFiltro = _mesFiltro.AddMonths(1); await Cargar(); }

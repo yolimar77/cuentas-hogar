@@ -13,6 +13,11 @@
         <button class="btn btn-primary btn-sm" @onclick="AbrirNuevo"><i class="ph-bold ph-plus"></i> Nuevo</button>
     </div>
 
+    @if (_errorGuardar is not null && !_mostrarFormulario)
+    {
+        <div class="alert alert-danger small py-2" role="alert">⚠️ @_errorGuardar</div>
+    }
+
     @if (_ingresos.Count > 0)
     {
         <h6 class="text-success">Ingresos fijos</h6>
@@ -279,6 +284,12 @@
 
             if (_esEdicion)
             {
+                // Todo este bloque (leer movimientos, borrar los obsoletos, regenerar, releer y
+                // sellar) debe verse como una sola operación atómica: si una sync en curso pisara
+                // el almacenamiento a mitad de camino con una foto de antes de editar, el recurrente
+                // quedaría medio regenerado.
+                using var _ = await Db.BloqueoAsync();
+
                 // Al editar, borrar los movimientos generados del mes en curso en adelante para
                 // regenerarlos con la nueva configuración (importe, frecuencia o día). Los meses
                 // anteriores conservan su importe real. No se añaden tombstones porque son auto-generados.
@@ -316,9 +327,17 @@
 
     private async Task Eliminar(string id)
     {
-        await Db.EliminarRecurrenteAsync(id);
-        await Cargar();
-        _ = Sync.SincronizarAsync();
+        _errorGuardar = null;
+        try
+        {
+            await Db.EliminarRecurrenteAsync(id);
+            await Cargar();
+            _ = Sync.SincronizarAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorGuardar = $"No se ha podido eliminar: {ex.Message}";
+        }
     }
 
     private void Cerrar() { _mostrarFormulario = false; _esEdicion = false; _errorGuardar = null; }
