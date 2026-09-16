@@ -79,7 +79,9 @@ public class SyncService(DriveService drive, LocalDbService db)
             // 5. Propagar categoría/cuenta del recurrente a sus movimientos generados
             PasoActual = "propagando recurrentes";
             OnEstadoCambiado?.Invoke();
-            int cambiosPropagacion = await PropagarcategoriasRecurrentesAsync();
+            int cambiosPropagacion;
+            using (await db.BloqueoAsync())
+                cambiosPropagacion = await PropagarcategoriasRecurrentesAsync();
 
             int totalCambios = cambiosMov + cambiosRec + cambiosCat + cambiosCuent + cambiosReparacion + cambiosPropagacion;
             UltimaSincronizacion = DateTime.Now;
@@ -106,13 +108,19 @@ public class SyncService(DriveService drive, LocalDbService db)
 
     public async Task RestablecerTombstonesAsync()
     {
-        using var _ = await db.BloqueoAsync();
-        await db.LimpiarTodosEliminadosAsync();
+        // Llamadas de red primero, bloqueo local después y breve — igual que el resto de esta
+        // clase. Antes el bloqueo envolvía también las dos llamadas a Drive: si la red iba lenta o
+        // se colgaba, dejaba todo el guardado/lectura local del resto de la app esperando ese
+        // tiempo (el mismo problema que ya se corrigió en SincronizarAsync, pero se había quedado
+        // aquí sin corregir).
         var archivos = await drive.ListarArchivosAsync();
         var idx = new Dictionary<string, DriveFileInfo>();
         foreach (var f in archivos) idx[f.Nombre] = f;
         if (idx.TryGetValue(NombreDels, out var arc))
             await drive.EliminarArchivoAsync(arc.Id);
+
+        using var _ = await db.BloqueoAsync();
+        await db.LimpiarTodosEliminadosAsync();
     }
 
     // Punto de entrada público para propagar desde la UI (al guardar un recurrente)
@@ -170,9 +178,13 @@ public class SyncService(DriveService drive, LocalDbService db)
     // Categoría y cuenta: se propagan siempre (son clasificaciones, no afectan al histórico).
     // Importe y concepto: solo del mes en curso en adelante, para respetar el histórico real
     // de los meses ya cerrados.
+    // No coge el bloqueo (igual que Reemplazar*Async/MarcarEliminadosAsync): los dos llamadores
+    // (PropagateRecurrentesAsync y el paso "propagando recurrentes" de SincronizarAsync) ya lo
+    // tienen cogido cuando la llaman. Antes lo cogía también aquí dentro — PropagateRecurrentesAsync
+    // ya lo tenía cogido al llamarla, así que se quedaba esperando a soltar un bloqueo que ella
+    // misma sujetaba: el mismo autobloqueo que colgaba el guardado de recurrentes, en otro sitio.
     private async Task<int> PropagarcategoriasRecurrentesAsync()
     {
-        using var _ = await db.BloqueoAsync();
         var recurrentes = await db.ObtenerRecurrentesAsync();
         var movimientos = await db.ObtenerMovimientosAsync();
         var recById     = recurrentes.ToDictionary(r => r.Id);
