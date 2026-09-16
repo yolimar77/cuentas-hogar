@@ -80,6 +80,17 @@ public class PrevisionService(LocalDbService db)
             ? new DateTime(anyoFin.Value, mesFin.Value, DateTime.DaysInMonth(anyoFin.Value, mesFin.Value))
             : new DateTime(hoy.Year, hoy.Month, 1).AddMonths(2).AddDays(-1);
 
+        // Límite inferior del horizonte a comprobar: el mes pedido (o el actual si no se
+        // especifica). Sin esto, cada llamada recorría TODOS los meses desde que se creó cada
+        // recurrente para volver a preguntar "¿ya existe?" de meses que llevan generados desde
+        // hace tiempo — trabajo que crece sin límite con la antigüedad de la cuenta y que se repite
+        // en cada arranque de la app. Los meses que el usuario se salte (no abrir la app un tiempo)
+        // se rellenan solos en el momento en que Dashboard/Movimientos los consulten, porque ambos
+        // llaman a este método acotado al mes que están mostrando.
+        var inicioHorizonte = (mesFin.HasValue && anyoFin.HasValue)
+            ? new DateTime(anyoFin.Value, mesFin.Value, 1)
+            : new DateTime(hoy.Year, hoy.Month, 1);
+
         foreach (var rec in recurrentes.Where(r => r.Activo))
         {
             var limite = rec.FechaFin is null || finHorizonte <= rec.FechaFin.Value
@@ -88,7 +99,7 @@ public class PrevisionService(LocalDbService db)
 
             if (rec.Frecuencia == Models.Frecuencia.Semanal)
             {
-                var cursor = rec.FechaInicio;
+                var cursor = rec.FechaInicio > inicioHorizonte ? rec.FechaInicio : inicioHorizonte;
                 while (cursor.DayOfWeek != rec.DiaDeSemana) cursor = cursor.AddDays(1);
                 while (cursor <= limite)
                 {
@@ -112,7 +123,8 @@ public class PrevisionService(LocalDbService db)
             }
             else if (rec.Frecuencia == Models.Frecuencia.Anual)
             {
-                var anyo = rec.FechaInicio.Year;
+                var anyo = Math.Max(rec.FechaInicio.Year, inicioHorizonte.Year);
+                if (new DateTime(anyo, rec.FechaInicio.Month, 1) < inicioHorizonte) anyo++;
                 while (new DateTime(anyo, rec.FechaInicio.Month, 1) <= limite)
                 {
                     var periodo = $"{anyo:0000}-{rec.FechaInicio.Month:00}";
@@ -136,7 +148,8 @@ public class PrevisionService(LocalDbService db)
             }
             else
             {
-                var fecha = new DateTime(rec.FechaInicio.Year, rec.FechaInicio.Month, 1);
+                var inicioRec = new DateTime(rec.FechaInicio.Year, rec.FechaInicio.Month, 1);
+                var fecha = inicioRec > inicioHorizonte ? inicioRec : inicioHorizonte;
                 while (fecha <= limite)
                 {
                     var periodo = fecha.ToString("yyyy-MM");
