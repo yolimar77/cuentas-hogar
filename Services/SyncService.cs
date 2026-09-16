@@ -29,12 +29,12 @@ public class SyncService(DriveService drive, LocalDbService db)
 
         try
         {
-            // Bloqueo de principio a fin: cada paso interno lee el almacenamiento local, tarda
-            // hablando con Drive, y luego sobrescribe la lista completa. Sin mantener el bloqueo
-            // durante todo el ciclo, un movimiento guardado localmente a mitad de la sync se
-            // perdería al pisarlo con la foto tomada al principio de ese paso.
-            using var _ = await db.BloqueoAsync();
-
+            // IMPORTANTE: no hay un bloqueo de principio a fin aquí. Cada paso interno habla con
+            // Drive (puede tardar mucho o colgarse en una conexión mala) y solo readquiere el
+            // bloqueo brevemente justo antes de escribir en local, releyendo el estado fresco en
+            // ese momento. Si se mantuviera un único bloqueo durante toda la sync, una llamada a
+            // Drive que se cuelga bloquearía también cualquier guardado/lectura local del resto
+            // de la app durante todo ese tiempo (esto pasó: sync colgada = app entera colgada).
             var archivos = await drive.ListarArchivosAsync();
             var idx = new Dictionary<string, DriveFileInfo>();
             foreach (var f in archivos) idx[f.Nombre] = f;
@@ -109,6 +109,8 @@ public class SyncService(DriveService drive, LocalDbService db)
     {
         if (remapCats.Count == 0 && remapCuents.Count == 0) return 0;
 
+        using var _ = await db.BloqueoAsync();
+
         bool cambio = false;
         var movimientos = await db.ObtenerMovimientosAsync();
         foreach (var mov in movimientos)
@@ -149,6 +151,7 @@ public class SyncService(DriveService drive, LocalDbService db)
     // de los meses ya cerrados.
     private async Task<int> PropagarcategoriasRecurrentesAsync()
     {
+        using var _ = await db.BloqueoAsync();
         var recurrentes = await db.ObtenerRecurrentesAsync();
         var movimientos = await db.ObtenerMovimientosAsync();
         var recById     = recurrentes.ToDictionary(r => r.Id);
@@ -218,15 +221,34 @@ public class SyncService(DriveService drive, LocalDbService db)
         else
             await drive.SubirArchivoAsync(NombreMovs, json);
 
-        var listaIds  = lista.Select(m => m.Id).ToHashSet();
-        var localById = local.ToDictionary(m => m.Id);
-        bool hayCambios = lista.Count != local.Count
-            || lista.Any(m => !localById.ContainsKey(m.Id))
-            || local.Any(m => !listaIds.Contains(m.Id))
-            || lista.Any(m => localById.TryGetValue(m.Id, out var l) && l.ModificadoEn != m.ModificadoEn);
-
         foreach (var mov in lista) mov.Sincronizado = true;
-        await db.ReemplazarMovimientosAsync(lista);
+
+        // Desde que se leyó "local" hasta aquí han pasado dos llamadas de red a Drive (pueden
+        // tardar). Antes de escribir, releer el almacenamiento fresco y conservar cualquier
+        // movimiento guardado o editado localmente mientras tanto (gana por ModificadoEn más
+        // reciente) y respetar cualquiera que se haya borrado localmente entre medias.
+        using var _ = await db.BloqueoAsync();
+        var actual = await db.ObtenerMovimientosAsync();
+        var idsOriginales = local.Select(m => m.Id).ToHashSet();
+        var borradosMientras = idsOriginales.Except(actual.Select(m => m.Id)).ToHashSet();
+
+        var final = lista.Where(m => !borradosMientras.Contains(m.Id)).ToDictionary(m => m.Id);
+        foreach (var mov in actual)
+        {
+            if (eliminados.Contains(mov.Id)) continue;
+            if (!final.TryGetValue(mov.Id, out var existente) || mov.ModificadoEn > existente.ModificadoEn)
+                final[mov.Id] = mov;
+        }
+        var listaFinal = final.Values.OrderBy(m => m.Fecha).ToList();
+
+        var listaIds  = listaFinal.Select(m => m.Id).ToHashSet();
+        var localById = local.ToDictionary(m => m.Id);
+        bool hayCambios = listaFinal.Count != local.Count
+            || listaFinal.Any(m => !localById.ContainsKey(m.Id))
+            || local.Any(m => !listaIds.Contains(m.Id))
+            || listaFinal.Any(m => localById.TryGetValue(m.Id, out var l) && l.ModificadoEn != m.ModificadoEn);
+
+        await db.ReemplazarMovimientosAsync(listaFinal);
         return hayCambios ? 1 : 0;
     }
 
@@ -261,14 +283,31 @@ public class SyncService(DriveService drive, LocalDbService db)
         else
             await drive.SubirArchivoAsync(NombreRecs, json);
 
-        var localById = local.ToDictionary(r => r.Id);
-        bool hayCambios = lista.Count != local.Count
-            || lista.Any(r => !localById.ContainsKey(r.Id))
-            || local.Any(r => !merged.ContainsKey(r.Id))
-            || lista.Any(r => localById.TryGetValue(r.Id, out var l) && l.ModificadoEn != r.ModificadoEn);
-
         foreach (var rec in lista) rec.Sincronizado = true;
-        await db.ReemplazarRecurrentesAsync(lista);
+
+        // Igual que en movimientos: releer fresco antes de escribir, para no perder un
+        // recurrente creado/editado/borrado localmente durante las llamadas a Drive.
+        using var _ = await db.BloqueoAsync();
+        var actual = await db.ObtenerRecurrentesAsync();
+        var idsOriginales = local.Select(r => r.Id).ToHashSet();
+        var borradosMientras = idsOriginales.Except(actual.Select(r => r.Id)).ToHashSet();
+
+        var final = lista.Where(r => !borradosMientras.Contains(r.Id)).ToDictionary(r => r.Id);
+        foreach (var rec in actual)
+        {
+            if (eliminados.Contains(rec.Id)) continue;
+            if (!final.TryGetValue(rec.Id, out var existente) || rec.ModificadoEn > existente.ModificadoEn)
+                final[rec.Id] = rec;
+        }
+        var listaFinal = final.Values.ToList();
+
+        var localById = local.ToDictionary(r => r.Id);
+        bool hayCambios = listaFinal.Count != local.Count
+            || listaFinal.Any(r => !localById.ContainsKey(r.Id))
+            || local.Any(r => !final.ContainsKey(r.Id))
+            || listaFinal.Any(r => localById.TryGetValue(r.Id, out var l) && l.ModificadoEn != r.ModificadoEn);
+
+        await db.ReemplazarRecurrentesAsync(listaFinal);
         return hayCambios ? 1 : 0;
     }
 
@@ -317,14 +356,39 @@ public class SyncService(DriveService drive, LocalDbService db)
         else
             await drive.SubirArchivoAsync(NombreCats, json);
 
-        var listaIds = lista.Select(c => c.Id).ToHashSet();
-        bool hayCambios = lista.Count != local.Count
-            || lista.Any(c => !localById.ContainsKey(c.Id))
+        // Releer fresco antes de escribir: conservar cualquier categoría creada/editada/borrada
+        // localmente durante las llamadas a Drive, y repetir la deduplicación por nombre+tipo
+        // sobre el conjunto combinado para no dejar duplicados sueltos.
+        using var _ = await db.BloqueoAsync();
+        var actual = await db.ObtenerCategoriasAsync();
+        var idsOriginales = local.Select(c => c.Id).ToHashSet();
+        var borradosMientras = idsOriginales.Except(actual.Select(c => c.Id)).ToHashSet();
+
+        var combinadas = lista.Where(c => !borradosMientras.Contains(c.Id)).ToDictionary(c => c.Id);
+        foreach (var cat in actual)
+        {
+            if (eliminados.Contains(cat.Id)) continue;
+            if (!combinadas.TryGetValue(cat.Id, out var existente) || cat.ModificadoEn > existente.ModificadoEn)
+                combinadas[cat.Id] = cat;
+        }
+
+        var listaFinal = new List<Categoria>();
+        foreach (var grupo in combinadas.Values.GroupBy(c => (c.Nombre.Trim().ToLowerInvariant(), c.Tipo)))
+        {
+            var ganador = grupo.OrderBy(c => c.ModificadoEn).First();
+            listaFinal.Add(ganador);
+            foreach (var perdedor in grupo.Where(c => c.Id != ganador.Id))
+                remap[perdedor.Id] = ganador.Id;
+        }
+
+        var listaIds = listaFinal.Select(c => c.Id).ToHashSet();
+        bool hayCambios = listaFinal.Count != local.Count
+            || listaFinal.Any(c => !localById.ContainsKey(c.Id))
             || local.Any(c => !listaIds.Contains(c.Id))
-            || lista.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn)
+            || listaFinal.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn)
             || remap.Count > 0;
 
-        await db.ReemplazarCategoriasAsync(lista);
+        await db.ReemplazarCategoriasAsync(listaFinal);
         return (hayCambios ? 1 : 0, remap);
     }
 
@@ -371,14 +435,39 @@ public class SyncService(DriveService drive, LocalDbService db)
         else
             await drive.SubirArchivoAsync(NombreCuents, json);
 
-        var listaIds = lista.Select(c => c.Id).ToHashSet();
-        bool hayCambios = lista.Count != local.Count
-            || lista.Any(c => !localById.ContainsKey(c.Id))
+        // Releer fresco antes de escribir: conservar cualquier cuenta creada/editada/borrada
+        // localmente durante las llamadas a Drive, y repetir la deduplicación por nombre sobre
+        // el conjunto combinado para no dejar duplicados sueltos.
+        using var _ = await db.BloqueoAsync();
+        var actual = await db.ObtenerCuentasAsync();
+        var idsOriginales = local.Select(c => c.Id).ToHashSet();
+        var borradosMientras = idsOriginales.Except(actual.Select(c => c.Id)).ToHashSet();
+
+        var combinadas = lista.Where(c => !borradosMientras.Contains(c.Id)).ToDictionary(c => c.Id);
+        foreach (var cuenta in actual)
+        {
+            if (eliminados.Contains(cuenta.Id)) continue;
+            if (!combinadas.TryGetValue(cuenta.Id, out var existente) || cuenta.ModificadoEn > existente.ModificadoEn)
+                combinadas[cuenta.Id] = cuenta;
+        }
+
+        var listaFinal = new List<Cuenta>();
+        foreach (var grupo in combinadas.Values.GroupBy(c => c.Nombre.Trim().ToLowerInvariant()))
+        {
+            var ganadora = grupo.OrderBy(c => c.ModificadoEn).First();
+            listaFinal.Add(ganadora);
+            foreach (var perdedora in grupo.Where(c => c.Id != ganadora.Id))
+                remap[perdedora.Id] = ganadora.Id;
+        }
+
+        var listaIds = listaFinal.Select(c => c.Id).ToHashSet();
+        bool hayCambios = listaFinal.Count != local.Count
+            || listaFinal.Any(c => !localById.ContainsKey(c.Id))
             || local.Any(c => !listaIds.Contains(c.Id))
-            || lista.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn)
+            || listaFinal.Any(c => localById.TryGetValue(c.Id, out var l) && l.ModificadoEn != c.ModificadoEn)
             || remap.Count > 0;
 
-        await db.ReemplazarCuentasAsync(lista);
+        await db.ReemplazarCuentasAsync(listaFinal);
         return (hayCambios ? 1 : 0, remap);
     }
 
@@ -402,6 +491,10 @@ public class SyncService(DriveService drive, LocalDbService db)
         var nuevasEliminaciones = deDrive.Except(locales).ToList();
         if (nuevasEliminaciones.Count > 0)
         {
+            // Sin llamadas de red dentro de este bloque (la descarga ya se hizo arriba, la
+            // subida de la lista de borrados se hace más abajo, fuera del bloqueo), así que
+            // el bloqueo aquí es breve.
+            using var _ = await db.BloqueoAsync();
             var movimientos = await db.ObtenerMovimientosAsync();
             var recurrentes = await db.ObtenerRecurrentesAsync();
             var categorias  = await db.ObtenerCategoriasAsync();

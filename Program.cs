@@ -7,7 +7,14 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
+// Timeout explícito: sin él, una petición a Drive que se queda colgada en una conexión móvil
+// mala tarda hasta 100s (el valor por defecto) en fallar, y con el bloqueo de LocalDbService
+// eso deja la app entera (no solo la sync) esperando ese tiempo por cada llamada de la sync.
+builder.Services.AddScoped(sp => new HttpClient
+{
+    BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
+    Timeout = TimeSpan.FromSeconds(20)
+});
 
 builder.Services.AddScoped<LocalDbService>();
 builder.Services.AddScoped<PrevisionService>();
