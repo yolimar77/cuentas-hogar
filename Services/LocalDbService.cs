@@ -22,23 +22,30 @@ public class LocalDbService(IJSRuntime js)
     private readonly SemaphoreSlim _bloqueo = new(1, 1);
     private static readonly AsyncLocal<bool> _bloqueoActivo = new();
     private static readonly IDisposable _bloqueoReentrante = new BloqueoNulo();
+    private static int _bloqueoContador = 0;
 
     public async Task<IDisposable> BloqueoAsync()
     {
         if (_bloqueoActivo.Value) return _bloqueoReentrante;
+        // DIAG temporal: cada intento lleva un número, para saber cuál se queda sin su "adquirido"
+        // (esperando para siempre) y cuál libera sin haber avisado que esperaba (bug de reentrada).
+        var n = System.Threading.Interlocked.Increment(ref _bloqueoContador);
+        Console.WriteLine($"[HA-diag] BloqueoAsync #{n}: esperando semáforo...");
         await _bloqueo.WaitAsync();
+        Console.WriteLine($"[HA-diag] BloqueoAsync #{n}: adquirido");
         _bloqueoActivo.Value = true;
-        return new Liberador(this);
+        return new Liberador(this, n);
     }
 
     private sealed class BloqueoNulo : IDisposable { public void Dispose() { } }
 
-    private sealed class Liberador(LocalDbService owner) : IDisposable
+    private sealed class Liberador(LocalDbService owner, int n) : IDisposable
     {
         public void Dispose()
         {
             _bloqueoActivo.Value = false;
             owner._bloqueo.Release();
+            Console.WriteLine($"[HA-diag] BloqueoAsync #{n}: liberado");
         }
     }
 

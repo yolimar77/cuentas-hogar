@@ -280,7 +280,9 @@
         }
         try
         {
+            Console.WriteLine("[HA-diag] Guardar: GuardarRecurrenteAsync...");
             await Db.GuardarRecurrenteAsync(_nuevo);
+            Console.WriteLine("[HA-diag] Guardar: GuardarRecurrenteAsync OK");
 
             if (_esEdicion)
             {
@@ -288,7 +290,9 @@
                 // sellar) debe verse como una sola operación atómica: si una sync en curso pisara
                 // el almacenamiento a mitad de camino con una foto de antes de editar, el recurrente
                 // quedaría medio regenerado.
+                Console.WriteLine("[HA-diag] Guardar: esperando bloqueo (bloque edición)...");
                 using var _ = await Db.BloqueoAsync();
+                Console.WriteLine("[HA-diag] Guardar: bloqueo adquirido (bloque edición)");
 
                 // Al editar, borrar los movimientos generados del mes en curso en adelante para
                 // regenerarlos con la nueva configuración (importe, frecuencia o día). Los meses
@@ -298,8 +302,10 @@
                 var conservados = todos.Where(m => !(m.RecurrenteId == _nuevo.Id && m.Fecha >= corte)).ToList();
                 if (conservados.Count != todos.Count)
                     await Db.ReemplazarMovimientosAsync(conservados);
+                Console.WriteLine("[HA-diag] Guardar: corte aplicado, generando...");
 
                 await Prevision.GenerarMovimientosRecurrentesAsync();
+                Console.WriteLine("[HA-diag] Guardar: GenerarMovimientosRecurrentesAsync OK");
 
                 // Sellar los regenerados como modificados ahora: en otro dispositivo aún existe la
                 // fila vieja de este periodo (sin tombstone) y el merge resuelve por ModificadoEn.
@@ -308,20 +314,26 @@
                 foreach (var m in regenerados.Where(m => m.RecurrenteId == _nuevo.Id && m.Fecha >= corte))
                     m.ModificadoEn = marca;
                 await Db.ReemplazarMovimientosAsync(regenerados);
+                Console.WriteLine("[HA-diag] Guardar: bloque edición terminado");
             }
             else
             {
                 await Prevision.GenerarMovimientosRecurrentesAsync();
             }
 
+            Console.WriteLine("[HA-diag] Guardar: PropagateRecurrentesAsync...");
             await Sync.PropagateRecurrentesAsync();
+            Console.WriteLine("[HA-diag] Guardar: PropagateRecurrentesAsync OK, Cargar...");
             await Cargar();
+            Console.WriteLine("[HA-diag] Guardar: Cargar OK, cerrando modal");
             _mostrarFormulario = false;
             _ = Sync.SincronizarAsync();
+            Console.WriteLine("[HA-diag] Guardar: fin (modal cerrado)");
         }
         catch (Exception ex)
         {
             _errorGuardar = $"Error al guardar: {ex.Message}";
+            Console.WriteLine($"[HA-diag] Guardar: EXCEPCIÓN — {ex}");
         }
     }
 
