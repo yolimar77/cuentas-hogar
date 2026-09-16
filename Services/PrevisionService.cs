@@ -74,6 +74,17 @@ public class PrevisionService(LocalDbService db)
     public async Task GenerarMovimientosRecurrentesAsync(int? mesFin = null, int? anyoFin = null)
     {
         using var _ = await db.BloqueoAsync();
+        await GenerarMovimientosRecurrentesSinBloqueoAsync(mesFin, anyoFin);
+    }
+
+    // Igual que los Reemplazar*Async/MarcarEliminadosAsync: no coge el bloqueo, asume que quien
+    // llama ya lo tiene. La usa Recurrentes.razor al editar, que ya coge el bloqueo para tratar
+    // borrar+regenerar+sellar como una sola operación — si esta función volviera a cogerlo por su
+    // cuenta (como hacía antes), esa segunda petición se queda esperando a que se suelte un bloqueo
+    // que el propio flujo ya tiene cogido: el mismo autobloqueo ya corregido en otros dos sitios,
+    // aquí en un tercero.
+    public async Task GenerarMovimientosRecurrentesSinBloqueoAsync(int? mesFin = null, int? anyoFin = null)
+    {
         var recurrentes = await db.ObtenerRecurrentesAsync();
 
         // Leer los movimientos una sola vez y comprobar "¿ya existe este periodo?" en memoria, en

@@ -304,8 +304,8 @@
                     await Db.ReemplazarMovimientosAsync(conservados);
                 Console.WriteLine("[HA-diag] Guardar: corte aplicado, generando...");
 
-                await Prevision.GenerarMovimientosRecurrentesAsync();
-                Console.WriteLine("[HA-diag] Guardar: GenerarMovimientosRecurrentesAsync OK");
+                await Prevision.GenerarMovimientosRecurrentesSinBloqueoAsync();
+                Console.WriteLine("[HA-diag] Guardar: GenerarMovimientosRecurrentesSinBloqueoAsync OK");
 
                 // Sellar los regenerados como modificados ahora: en otro dispositivo aún existe la
                 // fila vieja de este periodo (sin tombstone) y el merge resuelve por ModificadoEn.
