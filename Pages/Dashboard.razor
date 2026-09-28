@@ -122,9 +122,20 @@
                         </div>
                         @if (_prevision.GastosMinimoAjuste != 0)
                         {
-                            <div class="text-muted mt-2" style="font-size:0.75rem">
-                                ⚠ Si completas los @_prevision.GastosMinimoAjuste.ToString("C") que aún te faltan de @_prevision.NombresPendientes,
-                                el saldo real disponible (@_prevision.SaldoRealDisponible.ToString("C")) bajaría a @_prevision.SaldoTotal.ToString("C") en total
+                            <div class="text-muted mt-2 pt-2 border-top" style="font-size:0.75rem">
+                                <div>⚠ Si completas los @_prevision.GastosMinimoAjuste.ToString("C") que aún te faltan de @_prevision.NombresPendientes:</div>
+                                <div class="d-flex justify-content-between align-items-center ms-3 mt-1">
+                                    <div>Este mes cerraría en</div>
+                                    <div class="@(_prevision.Margen >= 0 ? "text-success" : "text-danger")">
+                                        @(_prevision.Margen >= 0 ? "+" : "")@_prevision.Margen.ToString("C")
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center ms-3">
+                                    <div>Saldo real disponible bajaría a</div>
+                                    <div class="@(_prevision.SaldoTotal >= 0 ? "text-success" : "text-danger")">
+                                        @(_prevision.SaldoTotal >= 0 ? "+" : "")@_prevision.SaldoTotal.ToString("C")
+                                    </div>
+                                </div>
                             </div>
                         }
                     </div>
