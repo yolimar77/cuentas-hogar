@@ -120,7 +120,7 @@
                                 </div>
                             </div>
                         </div>
-                        @if (_prevision.GastosMinimoAjuste != 0)
+                        @if (EsMesActual() && _prevision.GastosMinimoAjuste != 0)
                         {
                             <div class="text-muted mt-2 pt-2 border-top" style="font-size:0.75rem">
                                 <div>⚠ Si completas los @_prevision.GastosMinimoAjuste.ToString("C") que aún te faltan de @_prevision.NombresPendientes:</div>
