@@ -15,4 +15,7 @@ public class Movimiento
     public DateTime ModificadoEn { get; set; } = DateTime.MinValue;
     public string? RecurrenteId { get; set; }
     public string? Periodo { get; set; }
+
+    // Marcado manualmente por el usuario al comprobarlo contra el movimiento real del banco
+    public bool Conciliado { get; set; } = false;
 }

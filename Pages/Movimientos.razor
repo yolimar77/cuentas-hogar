@@ -80,14 +80,19 @@
                         <small class="fw-semibold text-success" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Ingresos</small>
                     </li>
                 }
-                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                    <div>
-                        <div>@mov.Concepto @(mov.RecurrenteId is not null ? new MarkupString("<i class=\"ph-bold ph-repeat\" style=\"font-size:0.8rem;opacity:0.6\"></i>") : new MarkupString(""))</div>
-                        <small class="text-muted">@mov.Fecha.ToString("dd/MM") · @NombreCategoria(mov.CategoriaId)</small>
-                        @if (Drive.Conectado && !mov.Sincronizado)
-                        {
-                            <div><span class="badge bg-warning text-dark" style="font-size:0.65rem" title="Guardado en este dispositivo, todavía no confirmado en Google Drive">⏳ Pendiente de sincronizar</span></div>
-                        }
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0 @(mov.Conciliado ? "bg-primary-subtle" : "")">
+                    <div class="d-flex align-items-center flex-grow-1 me-2" style="min-width:0">
+                        <button class="btn btn-link p-0 me-2 flex-shrink-0" style="width:1.4rem" @onclick="() => ToggleConciliado(mov)" title="@(mov.Conciliado ? "Conciliado con el banco (toca para desmarcar)" : "Marcar como conciliado con el banco")">
+                            <i class="ph-bold @(mov.Conciliado ? "ph-check-circle text-primary" : "ph-circle text-muted")" style="font-size:1.2rem"></i>
+                        </button>
+                        <div style="min-width:0">
+                            <div>@mov.Concepto @(mov.RecurrenteId is not null ? new MarkupString("<i class=\"ph-bold ph-repeat\" style=\"font-size:0.8rem;opacity:0.6\"></i>") : new MarkupString(""))</div>
+                            <small class="text-muted">@mov.Fecha.ToString("dd/MM") · @NombreCategoria(mov.CategoriaId)</small>
+                            @if (Drive.Conectado && !mov.Sincronizado)
+                            {
+                                <div><span class="badge bg-warning text-dark" style="font-size:0.65rem" title="Guardado en este dispositivo, todavía no confirmado en Google Drive">⏳ Pendiente de sincronizar</span></div>
+                            }
+                        </div>
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span class="fw-bold @(mov.Tipo == TipoMovimiento.Ingreso ? "text-success" : "text-danger")">
@@ -244,10 +249,29 @@
             Notas = mov.Notas,
             CreadoEn = mov.CreadoEn,
             Sincronizado = false,
-            ModificadoEn = DateTime.UtcNow
+            ModificadoEn = DateTime.UtcNow,
+            Conciliado = mov.Conciliado
         };
         _esEdicion = true;
         _mostrarFormulario = true;
+    }
+
+    private async Task ToggleConciliado(Movimiento mov)
+    {
+        _errorGuardar = null;
+        try
+        {
+            mov.Conciliado = !mov.Conciliado;
+            mov.Sincronizado = false;
+            mov.ModificadoEn = DateTime.UtcNow;
+            await Db.GuardarMovimientoAsync(mov);
+            await Cargar();
+            _ = Sync.SincronizarAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorGuardar = $"No se ha podido actualizar: {ex.Message}";
+        }
     }
 
     private async Task Guardar()
