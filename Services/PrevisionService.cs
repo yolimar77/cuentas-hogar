@@ -172,6 +172,38 @@ public class PrevisionService(LocalDbService db)
                     anyo++;
                 }
             }
+            else if (rec.Frecuencia is Models.Frecuencia.Bimestral or Models.Frecuencia.Trimestral
+                                     or Models.Frecuencia.Cuatrimestral or Models.Frecuencia.Semestral)
+            {
+                // Igual que Mensual (día del mes fijo, DiaDelMes) pero saltando de "intervalo" en
+                // "intervalo" meses en vez de uno a uno. El cursor arranca en el mes de FechaInicio
+                // y avanza siempre de intervalo en intervalo para no perder la fase (p.ej. un
+                // recurrente trimestral desde marzo cae en marzo/junio/septiembre/diciembre, nunca
+                // en abril) — debe coincidir exactamente con MovimientoRecurrente.EstaActivoEnMes.
+                var intervalo = Models.MovimientoRecurrente.IntervaloMeses(rec.Frecuencia);
+                var fecha = new DateTime(rec.FechaInicio.Year, rec.FechaInicio.Month, 1);
+                while (fecha < inicioHorizonte) fecha = fecha.AddMonths(intervalo);
+                while (fecha <= limite)
+                {
+                    var periodo = fecha.ToString("yyyy-MM");
+                    if (existentes.Add((rec.Id, periodo)))
+                    {
+                        var dia = Math.Min(rec.DiaDelMes, DateTime.DaysInMonth(fecha.Year, fecha.Month));
+                        nuevos.Add(new Movimiento
+                        {
+                            Concepto     = rec.Concepto,
+                            Importe      = rec.Importe,
+                            Tipo         = rec.Tipo,
+                            Fecha        = new DateTime(fecha.Year, fecha.Month, dia),
+                            CategoriaId  = rec.CategoriaId,
+                            CuentaId     = rec.CuentaId,
+                            RecurrenteId = rec.Id,
+                            Periodo      = periodo
+                        });
+                    }
+                    fecha = fecha.AddMonths(intervalo);
+                }
+            }
             else
             {
                 var inicioRec = new DateTime(rec.FechaInicio.Year, rec.FechaInicio.Month, 1);
@@ -244,7 +276,8 @@ public class PrevisionService(LocalDbService db)
             m.CuentaId != rec.CuentaId || m.Tipo != rec.Tipo || m.Concepto != rec.Concepto)
             return true;
 
-        if (rec.Frecuencia == Models.Frecuencia.Mensual)
+        if (rec.Frecuencia is Models.Frecuencia.Mensual or Models.Frecuencia.Bimestral or Models.Frecuencia.Trimestral
+                            or Models.Frecuencia.Cuatrimestral or Models.Frecuencia.Semestral)
         {
             var diaEsperado = Math.Min(rec.DiaDelMes, DateTime.DaysInMonth(anyo, mes));
             if (m.Fecha.Day != diaEsperado) return true;
